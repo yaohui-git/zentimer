@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.StillTimer" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <!-- Android 15+ 强制 edge-to-edge：状态栏/导航栏交给系统透明绘制，
+             内容避开安全区由 Compose 的 safeDrawingPadding 负责（挖孔、瀑布屏、横屏通用）。 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:colorBackground">@color/bg</item>
+    </style>
+</resources>

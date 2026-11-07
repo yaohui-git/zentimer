@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 冷墨蓝底 + 暖米金强调：沿用原版深色静谧调性，颜色整体改换 -->
+    <color name="bg">#080D14</color>
+    <color name="bg_elevated">#101923</color>
+    <color name="bg_card">#16222E</color>
+    <color name="accent">#E8CFA0</color>
+    <color name="accent_dim">#8C7E63</color>
+    <color name="text_primary">#F3F0E9</color>
+    <color name="text_secondary">#8C9BAA</color>
+    <color name="ring_track">#1F2D3A</color>
+    <color name="chip_stroke">#2B3A48</color>
+    <color name="divider">#1B2834</color>
+</resources>

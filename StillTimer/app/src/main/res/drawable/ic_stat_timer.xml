@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知栏小图标必须是单色 alpha 图，不能用实物照片；白色时钟环 + 指针 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,2.4 C6.7,2.4 2.4,6.7 2.4,12 C2.4,17.3 6.7,21.6 12,21.6 C17.3,21.6 21.6,17.3 21.6,12 C21.6,6.7 17.3,2.4 12,2.4 Z M12,6.6 L12,12.2 L16.2,14.4" />
+</vector>

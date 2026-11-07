@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BCP47 脚本限定：一份覆盖 zh-Hant-TW / zh-Hant-HK / zh-Hant-MO 等所有繁体中文 locale。 -->
+<resources>
+    <string name="app_name">靜息</string>
+</resources>
