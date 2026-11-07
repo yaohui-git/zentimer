@@ -81,9 +81,9 @@ def main():
         print("  确认素材授权无问题、就是要原样公开时，加 --force。")
         sys.exit(1)
 
-    if os.path.isdir(OUT):
-        shutil.rmtree(OUT)
-    os.makedirs(OUT)
+    # 不做整目录 rmtree：oss/ 里常有上百个素材文件，整批删除会触发批量删除保护，
+    # 也可能在中断时把生成目录删成半截。改为同名覆盖，源目录是唯一事实来源。
+    os.makedirs(OUT, exist_ok=True)
 
     for name in ROOT_DOCS:
         src = os.path.join(ROOT, name)
@@ -93,7 +93,7 @@ def main():
     for name in DIRS:
         src = os.path.join(ROOT, name)
         if os.path.isdir(src):
-            shutil.copytree(src, os.path.join(OUT, name), ignore=ignore)
+            shutil.copytree(src, os.path.join(OUT, name), ignore=ignore, dirs_exist_ok=True)
 
     with open(os.path.join(OUT, ".gitignore"), "w", encoding="utf-8", newline="\n") as f:
         f.write(OSS_GITIGNORE)
