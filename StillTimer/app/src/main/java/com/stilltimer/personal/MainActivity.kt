@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -485,7 +486,7 @@ private fun DrawerContent(onSelect: (Screen) -> Unit) {
                     text = Lang.t("about_tagline"),
                     color = C.secondary,
                     fontSize = 11.sp,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -1375,36 +1376,24 @@ private fun AboutPage(ctx: Context, onToast: (String) -> Unit) {
         )
         Spacer(Modifier.height(18.dp))
         Text(text = Lang.t("app_title"), color = C.text, fontSize = 21.sp, fontWeight = FontWeight.Light, letterSpacing = 4.sp)
-        Spacer(Modifier.height(8.dp))
-        Text(text = Lang.t("about_tagline"), color = C.secondary, fontSize = 13.sp)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = Lang.t("about_tagline"),
+            color = C.secondary,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 18.dp)
+        )
         Spacer(Modifier.height(6.dp))
         Text(text = "${Lang.t("about_version")} ${AppInfo.VERSION}", color = C.accentDim, fontSize = 12.sp)
     }
-    Spacer(Modifier.height(28.dp))
+    Spacer(Modifier.height(22.dp))
 
-    // 用户给的信息：作者 / 邮箱 / 微信 / 公众号 / 开源地址（v2.3 已定）
-    AboutRow(Lang.t("about_author"), AppInfo.AUTHOR, null)
-    AboutRow(Lang.t("about_email"), AppInfo.EMAIL) {
-        if (!AppInfo.mail(ctx)) onToast(AppInfo.EMAIL)
-    }
-    AboutRow(Lang.t("about_wechat"), AppInfo.WECHAT) {
-        if (AppInfo.copy(ctx, AppInfo.WECHAT)) onToast(Lang.t("copied"))
-    }
-    AboutRow(Lang.t("about_official"), AppInfo.OFFICIAL_ACCOUNT) {
-        if (AppInfo.copy(ctx, AppInfo.OFFICIAL_ACCOUNT)) onToast(Lang.t("copied"))
-    }
-    AboutRow(
-        Lang.t("about_repo"),
-        if (AppInfo.repoIsUrl) AppInfo.REPO else Lang.t("about_repo_pending"),
-        if (AppInfo.repoIsUrl) ({ AppInfo.repo(ctx) }) else null
-    )
-    Text(
-        text = Lang.t("about_contact_body"),
-        color = C.secondary,
-        fontSize = 12.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 10.dp)
-    )
-    Spacer(Modifier.height(20.dp))
+    // v2.3 修订：作者 / 邮箱 / 微信 / 公众号合成一张 2×2 信息栏，
+    // 从原来的四张独立卡片压成一栏，省出的高度让打赏入口留在首屏。
+    ContactGrid(ctx, onToast)
+    Spacer(Modifier.height(14.dp))
 
     // v2.3 打赏：按用户决定只做「提示添加微信打赏」，点一下复制微信号并唤起微信
     Card(
@@ -1439,11 +1428,72 @@ private fun AboutPage(ctx: Context, onToast: (String) -> Unit) {
     Text(text = Lang.t("donate_note"), color = C.accentDim, fontSize = 11.sp)
     Spacer(Modifier.height(20.dp))
 
+    AboutRow(
+        Lang.t("about_repo"),
+        if (AppInfo.repoIsUrl) AppInfo.REPO else Lang.t("about_repo_pending"),
+        if (AppInfo.repoIsUrl) ({ AppInfo.repo(ctx) }) else null
+    )
+    Spacer(Modifier.height(8.dp))
+
     AboutBlock(Lang.t("about_license"), Lang.t("about_license_body"))
     AboutBlock(Lang.t("about_privacy"), Lang.t("about_privacy_body"))
     AboutBlock(Lang.t("about_assets"), Lang.t("about_assets_body"))
     Spacer(Modifier.height(8.dp))
     Text(text = Lang.t("about_offline_note"), color = C.accentDim, fontSize = 11.sp)
+}
+
+/** 一栏放下四项联系信息：2×2 紧凑网格，点某一项仍保留原来的复制 / 邮件动作。 */
+@Composable
+private fun ContactGrid(ctx: Context, onToast: (String) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = C.elevated),
+        border = BorderStroke(1.dp, C.stroke)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(text = Lang.t("about_contact"), color = C.secondary, fontSize = 11.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                ContactCell(Lang.t("about_author"), AppInfo.AUTHOR, null)
+                ContactCell(Lang.t("about_email"), AppInfo.EMAIL) {
+                    if (!AppInfo.mail(ctx)) onToast(AppInfo.EMAIL)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                ContactCell(Lang.t("about_wechat"), AppInfo.WECHAT) {
+                    if (AppInfo.copy(ctx, AppInfo.WECHAT)) onToast(Lang.t("copied"))
+                }
+                ContactCell(Lang.t("about_official"), AppInfo.OFFICIAL_ACCOUNT) {
+                    if (AppInfo.copy(ctx, AppInfo.OFFICIAL_ACCOUNT)) onToast(Lang.t("copied"))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(text = Lang.t("about_contact_body"), color = C.accentDim, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun RowScope.ContactCell(label: String, value: String, onClick: (() -> Unit)?) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(8.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 2.dp)
+    ) {
+        Text(text = label, color = C.secondary, fontSize = 10.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = value,
+            color = C.accent,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable

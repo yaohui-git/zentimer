@@ -1,6 +1,8 @@
 # 静息 · Still / zeatimer
 
-> 一只需要计时和一声钵响的闹钟。A timer and a bowl. Nothing else.
+> **若人静坐一须臾，胜造恒沙七宝塔**
+>
+> A moment of still sitting surpasses seven-jewelled pagodas beyond count.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-3DDC84.svg)](https://developer.android.com/)
