@@ -1,7 +1,7 @@
 # 应用商店上架准备 · STORE LISTING
 
 > 目标平台：小米应用商店（HyperOS / 红米 15 Pro），兼顾其他国内安卓商店。
-> 状态：**v2.3 修订四资料已备齐，未实际提交**。截图已具备 adb 真机条件；仍缺你本人办理的资质、隐私政策 URL（见第 5 节）。
+> 状态：**v2.4 资料已备齐，未实际提交**。截图已具备 adb 真机条件；仍缺你本人办理的资质、隐私政策 URL（见第 5 节）。
 
 ---
 
@@ -11,7 +11,7 @@
 | --- | --- |
 | 应用名称 | **静息**（English `zentimer`）｜定位描述：极简禅意冥想计时器 / Minimal Zen Meditation Timer（**不是应用名**） |
 | 包名 | `com.yaohui.zentimer`（**上架后不可再改**；早期 `com.stilltimer.personal` 版本不能覆盖升级，需卸载重装） |
-| 版本 | **2.3（versionCode 4）** |
+| 版本 | **2.4（versionCode 5）** |
 | 分类 | 工具 / 效率 / 健康辅助（**不要选「冥想课程」类，会被要求内容资质**） |
 | 支持系统 | Android 8.0+（minSdk 26），targetSdk 37，arm64 / armv7 通用（无 native so） |
 | 支持语言 | 简体中文、繁體中文、English |

@@ -71,10 +71,10 @@
 
 ## 安装
 
-直接装 [`releases/静息计时-v2.3.apk`](releases/静息计时-v2.3.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
+直接装 [`releases/静息计时-v2.4.apk`](releases/静息计时-v2.4.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
 
 ```bash
-adb install -r releases/静息计时-v2.3.apk
+adb install -r releases/静息计时-v2.4.apk
 ```
 
 签名证书 SHA-256：`64047d9373cf2e7b942bf171e180c5b65c5e2601c68e9260c2b4aef55cc480d9`（`zentimer.jks`，主体 `CN=zentimer`，RSA 2048 / 有效期约 27 年）。

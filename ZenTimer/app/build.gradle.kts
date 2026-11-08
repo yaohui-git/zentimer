@@ -27,13 +27,20 @@ android {
         applicationId = "com.yaohui.zentimer"
         minSdk = 26
         targetSdk = 37
-        versionCode = 4
-        versionName = "2.3"
+        // 版本号唯一来源。改这里即可，AppInfo 通过 BuildConfig 读，界面与安装信息不会再对不上。
+        // 规则：任何一次出包（哪怕只改一行代码）都要 +1 versionCode；versionName 按 主.次 递增。
+        versionCode = 5
+        versionName = "2.4"
+    }
+
+    buildFeatures {
+        // 要读 BuildConfig.VERSION_NAME / VERSION_CODE，AGP 8 起默认关闭，必须显式打开
+        buildConfig = true
     }
 
     signingConfigs {
         if (hasSigning) {
-            create("still") {
+            create("zentimer") {
                 storeFile = releaseKeystore
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
@@ -44,11 +51,11 @@ android {
 
     buildTypes {
         debug {
-            if (hasSigning) signingConfig = signingConfigs.getByName("still")
+            if (hasSigning) signingConfig = signingConfigs.getByName("zentimer")
         }
         release {
             isMinifyEnabled = false
-            if (hasSigning) signingConfig = signingConfigs.getByName("still")
+            if (hasSigning) signingConfig = signingConfigs.getByName("zentimer")
         }
     }
 

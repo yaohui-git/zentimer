@@ -9,20 +9,24 @@ import android.net.Uri
 /**
  * 发布信息与联系方式的唯一配置入口。界面不写死任何一处，改这里即可。
  *
- * 打赏刻意不做内嵌支付：v2.3 按用户决定改为「提示添加微信打赏」——点一下复制微信号
+ * 打赏刻意不做内嵌支付：按用户决定改为「提示添加微信打赏」——点一下复制微信号
  * 并唤起微信，钱由用户在微信里自行转账，本应用不展示收款码、不接任何支付接口、
  * 不碰付款流程。这样既省掉了收款码素材，也避开了个人静态收款码用于经营性收款 /
  * 远程非面对面收款的合规问题（央行银发〔2021〕259 号）与商店「虚拟打赏」资质要求。
  * 公域调研原文见 交付说明.md「附录 · 打赏方案调研」。
  */
 object AppInfo {
-    const val VERSION = "2.3"
-    const val VERSION_CODE = 4
+    /**
+     * 版本号不在代码里另写一份——直接从构建产物读，避免「gradle 里是 2.4、界面上还是 2.3」。
+     * 要改版本，只改 app/build.gradle.kts 的 versionCode / versionName。
+     */
+    val VERSION: String = BuildConfig.VERSION_NAME
+    val VERSION_CODE: Int = BuildConfig.VERSION_CODE
     const val AUTHOR = "耀慧"
     const val EMAIL = "luoxu_disk@163.com"
     const val WECHAT = "pingyishufang"
     const val OFFICIAL_ACCOUNT = "何处青山不道场"
-    const val REPO = "https://github.com/yaohui-git/zentimer"  // v2.3 定稿：仓库已由 zeatimer 改名为 zentimer
+    const val REPO = "https://github.com/yaohui-git/zentimer"  // 仓库已由 zeatimer 改名为 zentimer
     const val LICENSE = "Apache-2.0"
 
     val repoIsUrl: Boolean get() = REPO.startsWith("http://") || REPO.startsWith("https://")

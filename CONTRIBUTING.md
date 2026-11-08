@@ -36,6 +36,12 @@ gradle assembleDebug
 
 寺院、道观等非营利组织可享优惠或免费定制，其他用途另议；可定制名称、图标、配色、铃声、默认时长方案与文案。完整说明见 [`README.md`](README.md)「定制与合作」。定制版同样要保持离线、无授权请求、无广告的极简禅意底线。
 
+## 版本号规则
+
+- **唯一来源**是 `ZenTimer/app/build.gradle.kts` 的 `versionCode` / `versionName`。界面通过 `BuildConfig` 读取，**不要**再到 Kotlin 里手写一份版本常量。
+- **每次出包都要 +1 `versionCode`**，哪怕只改一行；`versionName` 按「主.次」递增。理由很实际：商店上传要求 `versionCode` 单调递增，同号会被判重复包；版本号不变，出问题时也无法判断测试机装的是哪一份。
+- 产物文件名带上版本号（`静息计时-v2.4.apk`），**已发布的文件名不再覆盖**，历史包留在 `releases/` 里。
+
 ## 报告问题
 
 请用 Issue 模板，至少带上：手机型号、Android 版本、复现步骤、是否开了准备时间 / 间隔铃、以及 `adb logcat -d | grep -i zentimer` 的相关片段。

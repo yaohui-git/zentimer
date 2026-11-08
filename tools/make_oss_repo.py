@@ -71,6 +71,9 @@ def ignore(dirpath, names):
             drop.add(n)
         elif not release_apk and (n in EXCLUDE_FILES or n.endswith(EXCLUDE_SUFFIX)):
             drop.add(n)
+        elif n.startswith("_"):
+            # 以 _ 开头的是本地临时验证产物（如 screenshots/_now.png），不进公开仓库
+            drop.add(n)
     return drop
 
 
