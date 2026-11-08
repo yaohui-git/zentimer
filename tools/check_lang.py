@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / "StillTimer" / "app" / "src" / "main" / "java" / "com" / "stilltimer" / "personal"
+ROOT = Path(__file__).resolve().parents[1] / "ZenTimer" / "app" / "src" / "main" / "java" / "com" / "yaohui" / "zentimer"
 lang = (ROOT / "Lang.kt").read_text(encoding="utf-8")
 
 

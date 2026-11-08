@@ -30,6 +30,6 @@ assignees: ''
 
 **日志 / 截图**
 ```
-adb logcat -d | grep -i stilltimer
+adb logcat -d | grep -i zentimer
 ```
 <!-- 有截图请直接拖进来 -->

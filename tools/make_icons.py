@@ -5,7 +5,7 @@
 用户最终选定 **方案 B · 圆环计时** 作为 APK 启动图标：
   - 青绿打坐人形从用户提供的 AI 生成图里按颜色抠出（保留原明暗渐变）
   - 细金环 / 进度弧 / 端点光点 / 12 刻度为纯自绘，与 App 内计时圆环同构
-  - 不含任何原版 Insight Timer 的铜钵实物图，开源与商店审核无图标版权风险
+  - 不含任何第三方实物照片，开源与商店审核无图标版权风险
 方案 A（用户原图适配）与方案 C（圆相一息）仍生成在 store/ 留作对照，不进 APK。
 
 依赖：Pillow + numpy（仅生成期使用，不是 App 运行时依赖）。
@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = r"C:/Users/thinkpad/.workbuddy/clipboard-images/clipboard-2026-11-07T14-09-14-551Z-fe28deba.jpg"
-RES = os.path.join(ROOT, "StillTimer", "app", "src", "main", "res")
+RES = os.path.join(ROOT, "ZenTimer", "app", "src", "main", "res")
 STORE = os.path.join(ROOT, "store")
 os.makedirs(STORE, exist_ok=True)
 
@@ -182,7 +182,7 @@ def feature_graphic(icon):
     f_tag = font(21)
     f_small = font(17)
     dr.text((94, 132), "静  息", font=f_zh, fill=IVORY)
-    dr.text((96, 208), "Still · Meditation Timer", font=f_en, fill=GOLD)
+    dr.text((96, 208), "zentimer · Meditation Timer", font=f_en, fill=GOLD)
     dr.text((96, 268), "一只需要计时和一声钵响的闹钟", font=f_tag, fill=(178, 191, 203))
     dr.text((96, 300), "A timer and a bowl. Nothing else.", font=f_small, fill=(120, 137, 153))
     dr.line([(96, 352), (W - side - 140, 352)], fill=(43, 58, 72), width=2)

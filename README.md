@@ -2,7 +2,7 @@
 
 > 一款极简禅意冥想计时器（Minimal Zen Meditation Timer）· 仓库 `zentimer` · Android · Apache-2.0
 >
-> **应用名称**：中文「静息」／English `zentimer`。「极简禅意冥想计时器 / Minimal Zen Meditation Timer」只是定位描述，**不是应用名**；App 内的名称资源未作任何改动。
+> **应用名称**：简体「静息」／繁体「靜息」／English `zentimer`；英文系统的桌面图标与 App 内标题都显示 `zentimer`。「极简禅意冥想计时器 / Minimal Zen Meditation Timer」只是定位描述，**不是应用名**。
 
 > **若人静坐一须臾，胜造恒沙七宝塔**
 >
@@ -17,7 +17,7 @@
 
 **应用从不主动发起任何运行时权限请求**：不弹网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框。清单里三条前台服务 / 通知权限只是声明，系统不会向用户索取授权；也没有 `INTERNET` 权限，技术上无法联网。无第三方 SDK、无统计、无崩溃上报，所有设置只存本机。
 
-界面、声音与交互风格高仿 Insight Timer 20.40.0 的核心计时链路；模块边界先用 REA + craft anything 拆出 feature map，再按「只留计时核心」裁剪。简体中文 / 繁體中文 / English 三语，**首次默认跟随系统**（其他语言自动 English），应用内随时切换，不打断正在进行的练习。
+界面、声音与交互围绕「一屏一只圆环」这条主线独立设计；功能边界先做静态梳理，再按「只留计时核心」裁剪。简体中文 / 繁體中文 / English 三语，**首次默认跟随系统**（其他语言自动 English），应用内随时切换，不打断正在进行的练习。
 
 **English summary:** A minimal, offline Zen meditation timer for Android — one ring on screen, one bowl to begin, one bowl to end. No courses, no account, no analytics, no ads, no feeds. **No runtime permission prompts of any kind**: the app never asks for network, location, contacts, camera, microphone, storage or sign-in, and has no `INTERNET` permission at all. Simplified Chinese, Traditional Chinese and English, following the system locale by default (English for every other locale); dark / light / system theme. Apache-2.0 covers the code only — bundled third-party audio/images are **not** covered (see [NOTICE](NOTICE.md)).
 
@@ -77,7 +77,9 @@
 adb install -r releases/静息计时-v2.3.apk
 ```
 
-签名证书 SHA-256：`2fb424a9e98ce5fc4d8b5cb9efed4f20ee003039d1bc2cac97fd70ad01125204`。v2.0 ~ v2.3 共用同一密钥，可直接覆盖升级，设置与预设会保留。
+签名证书 SHA-256：`64047d9373cf2e7b942bf171e180c5b65c5e2601c68e9260c2b4aef55cc480d9`（`zentimer.jks`，主体 `CN=zentimer`，RSA 2048 / 有效期约 27 年）。
+
+**包名 `com.yaohui.zentimer`，内测期变更过包名与签名密钥**，因此早于本次命名的安装包**不能直接覆盖升级**，请先卸载再装；旧的设置与预设不会迁移。自本版起，同一包名 + 同一证书的后续版本可以正常覆盖升级。
 
 > MIUI / HyperOS 需要在「开发者选项」里同时打开 **USB 调试** 与 **USB 安装（安全设置）**，安装时手机会弹确认框；按钮一开始是灰色的，等倒计时结束或勾选风险提示后才会变亮。
 
@@ -90,7 +92,7 @@ adb install -r releases/静息计时-v2.3.apk
 ```bash
 export JAVA_HOME=/path/to/jdk-17
 export ANDROID_HOME=/path/to/android-sdk
-cd StillTimer
+cd ZenTimer
 
 # 首次：从 example 复制并填自己的密钥（keystore.properties 与 .jks 均不入库）
 cp keystore.properties.example keystore.properties
@@ -115,10 +117,10 @@ SDK 的 `platform-tools/adb.exe` 可直接用：
 
 ```bash
 adb devices -l
-adb shell am start -n com.stilltimer.personal/.MainActivity
+adb shell am start -n com.yaohui.zentimer/.MainActivity
 adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml
 adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png
-adb logcat -d | grep -i stilltimer
+adb logcat -d | grep -i zentimer
 ```
 
 v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×2340 @440dpi）** 上实装验证：启动、控件树、抽屉、返回栈、截图与崩溃日志。**注意**：Android 15+ 才强制 edge-to-edge，低版本设备测不出顶部 insets 的最终效果，目标机红米 15 Pro 上的表现仍需目视确认；不同屏幕尺寸 / 折叠屏的适配按项目所有者要求**未做真机专项测试**。
@@ -135,7 +137,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 应用「关于」页里点一下「打赏作者」会自动复制微信号并唤起微信；你也可以在微信里直接搜索这个号。**本应用不展示收款码、不内嵌支付、不接任何支付 SDK、不处理金额 / 订单 / 付款结果**，付款全程发生在微信里。
 
-之所以刻意不做内嵌支付：微信个人收款码没有公开的一步唤起接口，支付宝个人静态收款码用于经营性 / 远程非面对面收款存在明确合规红线（央行银发〔2021〕259 号），国内商店的「虚拟打赏」还可能要求 ICP 经营许可证。调研过程见 [`交付说明.md`](交付说明.md) 附录。
+之所以刻意不做内嵌支付：微信个人收款码没有公开的一步唤起接口，支付宝个人静态收款码用于经营性 / 远程非面对面收款存在明确合规红线（央行银发〔2021〕259 号），国内商店的「虚拟打赏」还可能要求 ICP 经营许可证。
 
 | | |
 | --- | --- |
@@ -160,7 +162,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 ## 开源协议与素材授权（务必先读）
 
 - **代码**：`LICENSE` 采用 **Apache License 2.0**。适用于 Kotlin 源码、Gradle 脚本、本项目自写的 XML / 文案 / 绘制逻辑、`tools/` 脚本。
-- **素材不在协议范围内**：`NOTICE.md` 与 [`ASSETS-NOTICE.md`](ASSETS-NOTICE.md) 逐项列明。`res/raw/` 的 23 段录音与 `res/drawable-nodpi/` 的 36 张界面图提取自原版应用包，属于第三方资产；**公开分发 / 商用前请自行确认授权或替换**。启动图标（方案 B）为本项目自绘，其中打坐人形剪影由项目所有者提供。
+- **素材不在协议范围内**：`NOTICE.md` 与 [`ASSETS-NOTICE.md`](ASSETS-NOTICE.md) 逐项列明。`res/raw/` 的 23 段录音与 `res/drawable-nodpi/` 的 36 张界面图属于**第三方资产**，不在 Apache-2.0 范围内；**公开分发 / 商用前请自行确认授权或替换**。启动图标（方案 B）为本项目自绘，其中打坐人形剪影由项目所有者提供。
 - **一键净化**：`python tools/asset_privacy.py strip` 把实物素材移到本地 `assets-private/`（不入库），生成同名自绘占位，公开仓库仍能编译；本地 `restore` 即恢复完整版。
 - **打包干净仓库**：`python tools/make_oss_repo.py` 生成只含白名单文件的 `oss/`，排除签名密钥、密码、构建产物与逆向证据。
 
@@ -177,7 +179,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 ## 目录
 
 ```
-StillTimer/            Android 工程（Gradle + Kotlin + Compose，单模块）
+ZenTimer/            Android 工程（Gradle + Kotlin + Compose，单模块）
   app/src/main/java/   状态机、音频、语言、主题色、预设、前台服务、单 Activity UI
   app/src/main/res/    三语 strings、配色、主题、启动图标、声音与图片素材
 tools/                 图标生成、素材隐私开关、开源目录打包、三语文案对账
@@ -185,9 +187,8 @@ assets/                启动图标 512
 screenshots/           真机截图
 store/                 商店图标、宣传图、三套图标方案对比
 releases/              已签名 APK
-docs/                  feature map / 界面交互对照 / 高仿流程与证据
 LICENSE / NOTICE.md / CONTRIBUTING.md / PRIVACY-POLICY.md
-ASSETS-NOTICE.md / CHANGELOG.md / STORE-LISTING.md / 交付说明.md
+ASSETS-NOTICE.md / CHANGELOG.md / STORE-LISTING.md
 ```
 
 ---
@@ -198,4 +199,4 @@ ASSETS-NOTICE.md / CHANGELOG.md / STORE-LISTING.md / 交付说明.md
 
 ---
 
-*本项目是学习性质的高仿精简实现，与 Insight Timer / spotlightsix 无任何关联、无任何背书关系。*
+*本项目为个人独立作品。*

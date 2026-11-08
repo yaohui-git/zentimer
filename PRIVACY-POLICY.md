@@ -1,7 +1,7 @@
 # 隐私政策 / Privacy Policy
 
 **生效日期 / Effective date:** 2026-11-08
-**适用 / Applies to:** 静息 · zentimer（一款极简禅意冥想计时器 / A minimal Zen meditation timer，`com.stilltimer.personal`），Android 版 · v2.3
+**适用 / Applies to:** 静息 · zentimer（一款极简禅意冥想计时器 / A minimal Zen meditation timer，`com.yaohui.zentimer`），Android 版 · v2.3
 
 ---
 

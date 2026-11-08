@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-生成一个「可以直接 git init + push」的干净开源目录 stilltimer/oss/。
+生成一个「可以直接 git init + push」的干净开源目录 zentimer/oss/。
 
     python tools/asset_privacy.py strip   # 先净化素材
     python tools/make_oss_repo.py         # 再打包
 
 只复制白名单文件，从源头排除：成品 APK、签名密钥与密码、本机 SDK 路径、
 构建产物、逆向证据 .craft/、内部交付与分析文档、上游交接包。
-若发现 res/raw 里仍是原版大体积 mp3（说明没跑 strip），默认中止，避免误传。
+若发现 res/raw 里仍是第三方大体积 mp3（说明没跑 strip），默认中止，避免误传。
 """
 import glob
 import os
@@ -16,18 +16,20 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "oss")
-RAW = os.path.join(ROOT, "StillTimer", "app", "src", "main", "res", "raw")
+RAW = os.path.join(ROOT, "ZenTimer", "app", "src", "main", "res", "raw")
 
 ROOT_DOCS = [
     "README.md", "LICENSE", "NOTICE.md", "CONTRIBUTING.md",
     "PRIVACY-POLICY.md", "CHANGELOG.md", "ASSETS-NOTICE.md",
-    "STORE-LISTING.md", "交付说明.md",
+    "STORE-LISTING.md",
 ]
-DIRS = ["StillTimer", "tools", "store", "assets", "screenshots", "releases", "docs", ".github"]
+# 注意：交付说明.md（内部交付记录）与 docs/（分析笔记）故意不在白名单里，
+# 它们含第三方应用名与逆向过程，只在本地保留，不随公开仓库发布。
+DIRS = ["ZenTimer", "tools", "store", "assets", "screenshots", "releases", ".github"]
 
 EXCLUDE_DIRS = {"build", ".gradle", "assets-private", "__pycache__", ".git"}
 EXCLUDE_FILES = {
-    "stilltimer.jks", "keystore.properties", "local.properties",
+    "zentimer.jks", "keystore.properties", "local.properties",
     "craft.zip", ".DS_Store",
 }
 EXCLUDE_SUFFIX = (".apk", ".jks", ".zip")
@@ -76,7 +78,7 @@ def main():
     force = "--force" in sys.argv
     big = [p for p in glob.glob(os.path.join(RAW, "*.mp3")) if os.path.getsize(p) > 20000]
     if big and not force:
-        print("⚠ 检测到 res/raw/ 里仍有", len(big), "段大体积 mp3（疑似原版实物录音）。")
+        print("⚠ 检测到 res/raw/ 里仍有", len(big), "段大体积 mp3（疑似第三方实物录音）。")
         print("  公开仓库前请先运行：python tools/asset_privacy.py strip")
         print("  确认素材授权无问题、就是要原样公开时，加 --force。")
         sys.exit(1)

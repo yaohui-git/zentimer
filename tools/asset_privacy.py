@@ -2,11 +2,11 @@
 """
 开源前的素材隐私开关（一个脚本两个方向）：
 
-    python tools/asset_privacy.py strip     # 移出原版实物素材，生成同名占位，公开仓库仍可编译
-    python tools/asset_privacy.py restore  # 把实物素材搬回，恢复完整高仿版（本地构建用）
+    python tools/asset_privacy.py strip     # 移出第三方实物素材，生成同名占位，公开仓库仍可编译
+    python tools/asset_privacy.py restore  # 把实物素材搬回，恢复完整版（本地构建用）
 
 为什么需要：
-  本应用为了「界面、声音高仿」复用了原版包里的 23 段 mp3 与 36 张图片。
+  本应用内置了 23 段 mp3 与 36 张图片作为第三方素材。
   个人自用没问题，但 **push 到公开 GitHub 仓库 / 提交应用商店就是分发行为**，
   这些素材的授权状态需要自行确认。strip 后仓库里只剩自绘占位素材（同名、同格式），
   工程照样能编译，任何人 clone 下来都能 build；本地再 restore 即得完整版。
@@ -24,14 +24,14 @@ import sys
 from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJ = os.path.join(ROOT, "StillTimer")
+PROJ = os.path.join(ROOT, "ZenTimer")
 RES = os.path.join(PROJ, "app", "src", "main", "res")
 RAW = os.path.join(RES, "raw")
 DRAW = os.path.join(RES, "drawable-nodpi")
 PRIVATE = os.path.join(PROJ, "assets-private")
 AUDIO = os.path.join(PRIVATE, "audio")
 IMAGES = os.path.join(PRIVATE, "images")
-# 启动图标 B 是自绘 + 用户自有 AI 图生成的人形，不属于原版素材，不参与剥离
+# 启动图标 B 是自绘 + 用户自有 AI 图生成的人形，不属于第三方素材，不参与剥离
 KEEP_IMAGES = {"ic_launcher_foreground.png"}
 
 BG = (8, 13, 20)

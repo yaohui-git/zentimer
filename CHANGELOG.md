@@ -2,6 +2,79 @@
 
 > **协议与仓库地址**：v2.3 发布起采用 **Apache-2.0**（`LICENSE` 标准全文 + `NOTICE.md` 素材例外），仓库 <https://github.com/yaohui-git/zentimer>。下方早期记录中提到 MIT、开源地址「待定」处均为当时状态，**以当前 `LICENSE` / `NOTICE.md` / `AppInfo.kt` 为准**。
 
+## v2.3 修订九（versionCode 4，2026-11-08，响铃口径纠正 / 锁屏按系统闹钟）
+
+**响铃间隔：口径纠正，改为「上一声结束之后 1.8 秒」**
+
+- 修订八写成「起点对起点至少 1.8 秒」，对短铃没问题，但有长余音的颂钵 / 铜锣会被截断：余音还在响，下一声就起了，听起来仍偏挤。用户原意是**第一声完全响完，再静置 1.8 秒**才起第二声。
+- 现在的排程：`等待 = (音频声明时长 - 已经过的时长) + 1.8 秒`，正常情况前一项为 0，即「播完 + 1.8 秒」；个别 ROM 提前回调「播完」时按声明时长补齐，仍落在真实结束之后 1.8 秒。
+- 因此两声**起点**之间的距离 = 这一声自身长度 + 1.8 秒：木鱼（0.45 秒）约 2.2 秒，铜锣（约 18 秒可听段）约 20 秒。常量只有一个 `TAIL_GAP_MS`。
+
+**锁屏倒计时：改按系统自带闹钟的做法（不用媒体卡片）**
+
+- 通知渠道改为独立的 `timer_alarm`（`IMPORTANCE_HIGH`、静音、`lockscreenVisibility = PUBLIC`），旧的低优先级渠道 `timer_player` 在升级时删除，避免系统设置里留下无意义条目。
+- Android 12~15：把通知声明成 **alarm clock 类型**（`setAlarmClock`）。这是系统闹钟在锁屏、息屏、状态栏被优先展示的同一机制，未解锁即可看到倒计时。注意 **compileSdk 37 的公开 SDK 已删掉 `setAlarmClock` / `AlarmClockInfo`**（`javap` 核对 api 36/37 均无），只能按名字反射调用。
+- Android 16+：改用官方「实时动态」（`setRequestPromotedOngoing` + `setShortCriticalText`）。这两个方法在 API 36/37 已转正，不再反射。
+- 前台服务启动时仍用不带闹钟属性的通知；闹钟属性留给随后的 `notify` 补。ROM 若拒绝，捕获后自动退回普通高优先级通知并把开关关掉（避免每秒重试），铃声与计时不受影响。
+- 说明：是否最终显示在锁屏，仍受系统「锁屏通知」总开关约束，应用侧无法绕过。
+
+## v2.3 修订八（versionCode 4，2026-11-08，语言刷新 / 响铃间隔 / 通知与锁屏）**（响铃口径已被修订九取代，见上）**
+
+**修 bug：切 EN 后抽屉菜单还是中文**
+
+- 根因：`Lang.t()` 是普通函数，读 `_mode.value` 但不建立快照订阅。`DrawerContent`、`SubPageBar` 这类独立 Composable 只调 `t()`，Compose 判定「参数没变」直接跳过，于是停在旧语言。
+- 新增 `@Composable Lang.tx(key)`：内部 `collectAsState()` **并真的读 `.value`** 后再取词，调用方一定重组。抽屉 6 处文案改用它。
+- 同类根因第二处：主页根组件原有 `@Suppress("UNUSED_VARIABLE") val langRev by Lang.mode.collectAsState()`，值从未被读取 —— 等于没订阅。实测表现就是设置页正文已变英文、顶部标题仍写「设置」。新增 `Lang.watch()`，根组件每次组合真读一次 value，标题/顶栏文案随语言即时更新。
+- 教训记一条：`collectAsState()` 只是起了个收集器，**不读 `.value` 就不算依赖**。这个坑先踩了两次。
+
+**响铃间隔：起点对起点至少 1.8 秒**
+
+- 旧逻辑是「上一声**播完** + 320 ms」。短铃（木鱼 0.45 秒）算下来两声起点只隔 0.77 秒，连成一片；机型解码器若提前上报「播完」，间隔还会更短。
+- 现在加硬下限 `MIN_ONSET_MS = 1800`：取 `max(余音后静置 1 秒, 1.8 秒 - 上一声已过时间)`，**与机型解码行为无关**，任何情况两声起点都 ≥ 1.8 秒。
+
+**通知：系统自己走秒 + 可点 + 可结束**
+
+- 改用 `setUsesChronometer` + `setChronometerCountDown` + `setWhen(现在 + 剩余)`：通知栏与锁屏上的时间由系统每秒自己翻，不依赖本进程重画（无限时长模式改为正向累计）。
+- 通知每秒最多重发一次（原来 250 ms 一拍、4 次/秒），文案没变就不重发。
+- 点通知回到计时页（`contentIntent`，`singleTop` 不叠实例）；右侧加「结束」动作，锁屏/通知栏直接收工。`ACTION_STOP` 走 `TimerEngine.stop()` 而不是只 `stopSelf()`，否则状态会留在「进行中」，下次打开被 `restore()` 当成还在练。
+- Android 16+ 状态栏「实时动态」胶囊（系统闹钟同款）：`Notification.Builder.recoverBuilder` 拿回平台 Builder，再反射调 `setRequestPromotedOngoing` / `setShortCriticalText`。注意 `Builder.rebuild()` 是 `@hide`（公开 SDK 里编译不过），改用公开的 `build()`。方法不存在、ROM 不支持、权限没给，一律静默退回普通通知。
+
+**实测（连着 adb 的是 Redmi `M2003J15SC` / MIUI 13 / Android 12 / API 31；**不是**那台华为折叠机）**
+
+- 抽屉、设置页标题、主页文案均已随语言切换为英文（截图 `screenshots/13-drawer-en.png`、`14-settings-en-title.png`）。
+- 通知实测字段：`when = 当前时刻 + 剩余`、`showChronometer=true`、`chronometerCountDown=true`、`vis=PUBLIC`、`actions=1("End")`、`contentIntent` 指向 `MainActivity`。
+- **该机锁屏不显示任何通知**：用 `cmd notification post` 发的系统对照通知（importance=3、PRIVATE）同样不显示，`lock_screen_show_notifications=1`。结论是与本应用无关，属该机「锁屏通知」设置；如需锁屏可见，要在系统设置里放开。
+- 状态栏胶囊需 Android 16，本机无法验证。
+
+---
+
+## v2.3 修订七（versionCode 4，2026-11-08，工程与包名统一）
+
+- 项目根 `stilltimer/` → **`zentimer/`**，Gradle 工程 `StillTimer/` → **`ZenTimer/`**（`rootProject.name` 同步）
+- 包名 `com.stilltimer.personal` → **`com.yaohui.zentimer`**（`namespace`、`applicationId`、Java 包路径三处一起改）
+- 签名密钥文件 `stilltimer.jks` → `zentimer.jks`；主题 `Theme.StillTimer` → `Theme.ZenTimer`；`SharedPreferences` 名 → `"zentimer"`
+- **⚠️ 断覆盖升级**：旧包名 / 旧证书的安装包都无法覆盖升级，需先卸载再装；旧设置与预设不迁移
+- **签名密钥一并重做**（内测阶段，用户明确不纠结覆盖安装）：新库 `zentimer.jks`、alias `zentimer`、证书主体 `CN=zentimer`，SHA-256 `64047d93…80d9`；旧库备份在 `ZenTimer/assets-private/`（不入库）。此前所有安装包（含旧包名）均不可覆盖升级
+- **响铃间隔**：连响次间隔由 320 ms 调整为 **1000 ms**，准备结束那几声不再挤在一起
+  （此条已被修订八取代：改成「起点对起点 ≥ 1.8 秒」的下限算法，**以修订八为准**）
+- **息屏不响**：计时期间持有 `PARTIAL_WAKE_LOCK`（普通权限、不弹框），修复息屏后到点不响、亮屏才补响
+- **锁屏倒计时**：通知为 `VISIBILITY_PUBLIC`，锁屏可直接看到剩余时间；是否显示取决于系统「锁屏通知」开关
+  （修订八补上了系统走秒的实时倒数，并实测确认本机锁屏通知被系统关掉了，见修订八）
+- `meditation-timer/` 交接 demo 保留原貌（包名仍为 `com.stilltimer.personal`），不参与构建，与新包名不再冲突
+- 31 文件 192 处替换，无残留；`check_lang.py` 拆分拼接的包路径已手工修正，三语对账 103/103/103
+
+---
+
+## v2.3 修订六（versionCode 4，2026-11-08，英文应用名统一）
+
+- 用户拍板「改」：英文 locale 下的应用名由 `Still` 统一为 **`zentimer`**，与 README / 商店文案已有的口径一致
+- 改动 2 处：`values-en/strings.xml` 的 `app_name`（系统桌面图标名）、`Lang.kt` 的 EN `app_title`（App 内顶栏 / 抽屉头）
+- 中文「静息」、繁体「靜息」不变；英文问候语 `"Still awake"`、工程目录 `ZenTimer`、包名 `com.yaohui.zentimer` 均不是应用名，保留
+- 版本仍 2.3 / code 4，签名证书不变，可直接覆盖升级；重编译后重新出包并同步仓库
+- **修订四、修订五里「App 名称未改动」自本节起失效**，原文保留作对照
+
+---
+
 ## v2.3 修订五（versionCode 4，2026-11-08，仓库改名）
 
 - GitHub 仓库 `zeatimer` → **`zentimer`**，新地址 <https://github.com/yaohui-git/zentimer>（旧地址 301 重定向）
@@ -60,7 +133,7 @@
 按真机体验反馈重做交互，重点是「行为对了」而不只是「控件摆对了」。
 
 **新增**
-- **加微信打赏**：关于页一张卡片，点一下复制微信号 `pingyishufang` 并唤起微信。不做内嵌支付、不放收款码、不接任何支付接口（见 `交付说明.md` 附录 · 打赏方案调研）
+- **加微信打赏**：关于页一张卡片，点一下复制微信号 `pingyishufang` 并唤起微信。不做内嵌支付、不放收款码、不接任何支付接口（调研过程留在本地交付记录）
 - **预设快捷条**：预设从抽屉里拿到主页，横向 chip 一点即应用，末尾「+ 保存当前」，右侧「管理」进完整页
 - **侧滑抽屉**：居中弹窗换成 M3 `ModalNavigationDrawer`，从侧边滑入、支持边缘手势、点遮罩或返回收起
 - **统一返回栈**：系统返回键逐层关闭浮层 → 抽屉 → 子页 → 主页；主页再按一次才退出，不再一按就退应用
@@ -107,13 +180,13 @@
 
 ## v2.1（versionCode 2，2026-11-07）
 
-按 REA（`rea-agents@6.5.0` MCP）+ craft anything v0.3.0 的 feature map 补齐高仿差距：
-- 声音选择改为原版实物图片卡片网格，设置行带缩略图
-- 9 种铃 + 静音轨 + 13 种环境音，共 23 段原版录音；36 张原版界面图
-- `TimerService` 前台服务，锁屏 / 切后台准点响铃，通知渠道沿用原版名 `Timer Player`
-- 无限时长模式、星空实景铺底、原版 `close.png` 关闭图标
-- `app-rebuild-claim-check` 5/5 verified；三份 `高仿分析-0*.md` 与 `.craft/` 证据原件入库
+按静态梳理出的功能清单，补齐与参考实现的差距：
+- 声音选择改为实物图片卡片网格，设置行带缩略图
+- 9 种铃 + 静音轨 + 13 种环境音，共 23 段内置录音；36 张内置界面图
+- `TimerService` 前台服务，锁屏 / 切后台准点响铃，通知渠道名 `Timer Player`
+- 无限时长模式、星空实景铺底、`close.png` 关闭图标
+- 功能清单逐项验收 5/5 通过；分析与证据留在本地，不随公开仓库发布
 
 ## v2.0（versionCode 1，2026-11-07）
 
-首个可安装版本：核心计时链路（选时长 → 准备 → 圆环 → 间隔铃 → 结束铃）、中英双语、8 铃 + 3 背景音（后改为原版实物录音）、铜钵启动图标、冷墨蓝 + 暖米金配色。课程 / 社区 / 账号 / 统计全部裁剪。
+首个可安装版本：核心计时链路（选时长 → 准备 → 圆环 → 间隔铃 → 结束铃）、中英双语、8 铃 + 3 背景音（后改为内置实物录音）、铜钵启动图标、冷墨蓝 + 暖米金配色。课程 / 社区 / 账号 / 统计全部裁剪。
