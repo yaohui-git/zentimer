@@ -22,7 +22,7 @@ object AppInfo {
     const val EMAIL = "luoxu_disk@163.com"
     const val WECHAT = "pingyishufang"
     const val OFFICIAL_ACCOUNT = "何处青山不道场"
-    const val REPO = "https://github.com/yaohui-git/zeatimer"  // v2.3 定稿：关于页据此变成可点条目
+    const val REPO = "https://github.com/yaohui-git/zentimer"  // v2.3 定稿：仓库已由 zeatimer 改名为 zentimer
     const val LICENSE = "Apache-2.0"
 
     val repoIsUrl: Boolean get() = REPO.startsWith("http://") || REPO.startsWith("https://")

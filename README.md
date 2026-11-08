@@ -1,4 +1,8 @@
-# 静息 · Still / zeatimer
+# 静息 · zentimer
+
+> 一款极简禅意冥想计时器（Minimal Zen Meditation Timer）· 仓库 `zentimer` · Android · Apache-2.0
+>
+> **应用名称**：中文「静息」／English `zentimer`。「极简禅意冥想计时器 / Minimal Zen Meditation Timer」只是定位描述，**不是应用名**；App 内的名称资源未作任何改动。
 
 > **若人静坐一须臾，胜造恒沙七宝塔**
 >
@@ -8,12 +12,14 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-3DDC84.svg)](https://developer.android.com/)
 [![Offline](https://img.shields.io/badge/Network-none-lightgrey.svg)](PRIVACY-POLICY.md)
 
-一个**完全离线**的冥想计时工具：选时长、准备安顿、听一声钵、坐一会儿、再听一声钵结束。
-没有课程、社区、账号、统计、广告，也没有联网。
+一个**完全离线、极简禅意**的冥想计时工具：一屏一只圆环，选时长、准备安顿、听一声钵、坐一会儿、再听一声钵结束。
+没有课程、社区、账号、统计、练习记录、广告、推送与信息流；预设收在顶栏书签，设置与关于收在侧滑抽屉，主屏不留常驻控件。留白、暖金细线、不打扰。
 
-界面、声音与交互风格高仿 Insight Timer 20.40.0 的核心计时链路；模块边界先用 REA + craft anything 拆出 feature map，再按「只留计时核心」裁剪。中文简体 / 中文繁体 / English 三语，应用内即时切换，不打断正在进行的练习。
+**应用从不主动发起任何运行时权限请求**：不弹网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框。清单里三条前台服务 / 通知权限只是声明，系统不会向用户索取授权；也没有 `INTERNET` 权限，技术上无法联网。无第三方 SDK、无统计、无崩溃上报，所有设置只存本机。
 
-**English summary:** A quiet, offline meditation timer for Android. Pick a duration, settle in, hear a bowl at the start and at the end. No courses, no account, no analytics, no network permission. Simplified Chinese, Traditional Chinese and English, switchable in-app. Apache-2.0 for the code only — bundled third-party audio/images are **not** covered (see [NOTICE](NOTICE.md)).
+界面、声音与交互风格高仿 Insight Timer 20.40.0 的核心计时链路；模块边界先用 REA + craft anything 拆出 feature map，再按「只留计时核心」裁剪。简体中文 / 繁體中文 / English 三语，**首次默认跟随系统**（其他语言自动 English），应用内随时切换，不打断正在进行的练习。
+
+**English summary:** A minimal, offline Zen meditation timer for Android — one ring on screen, one bowl to begin, one bowl to end. No courses, no account, no analytics, no ads, no feeds. **No runtime permission prompts of any kind**: the app never asks for network, location, contacts, camera, microphone, storage or sign-in, and has no `INTERNET` permission at all. Simplified Chinese, Traditional Chinese and English, following the system locale by default (English for every other locale); dark / light / system theme. Apache-2.0 covers the code only — bundled third-party audio/images are **not** covered (see [NOTICE](NOTICE.md)).
 
 ---
 
@@ -28,6 +34,12 @@
 | ![计时中](screenshots/04-running.png) | ![预设面板](screenshots/07-presets.png) | ![关于](screenshots/05-about.png) |
 
 > 预设只占顶栏一个书签图标，点开才是上面第二张的面板——主屏留给时间设置。
+
+| 设置（语言 / 主题色） | 浅色主题 | 定制与合作 |
+| --- | --- | --- |
+| ![设置](screenshots/06-settings.png) | ![浅色主题](screenshots/08-light.png) | ![定制与合作](screenshots/09-about-footer.png) |
+
+> 主题色在设置页切换：跟随系统 / 深色 / 浅色。浅色是宣纸米白 + 赭金，仍保持同样的克制层次。
 
 启动图标（方案 B「圆环计时」）：[`assets/icon-512.png`](assets/icon-512.png)。完整三方案对比见 [`store/图标方案对比.png`](store/图标方案对比.png)。
 
@@ -44,14 +56,16 @@
 | **预设组合** | 把「时长 + 准备 + 间隔 + 三种铃 + 背景音 + 响铃次数」整套存成一个方案，最多 6 个；**顶栏书签 → 底部面板，一点即应用**；保存 / 管理收在面板内，最近应用的一套高亮「已选」，可命名、可删除（删除有二次确认） |
 | 背景音 | 13 种环境音，开始自动循环、暂停 / 结束自动停止 |
 | 锁屏 | 前台服务驱动计时锚点，锁屏 / 切后台 / 进程被回收后仍准点响铃，通知栏显示剩余时间 |
-| 语言 | 设置页切换简体 / 繁体 / English，StateFlow 重组不重建 Activity、不打断计时；首次安装按系统语言定默认 |
+| 语言 | 设置页切换简体 / 繁体 / English，StateFlow 重组不重建 Activity、不打断计时；**首次默认跟随系统：简体 / 繁体 / 其他语言一律 English**，设置页可随时恢复「跟随系统」 |
+| **主题色** | **跟随系统 / 深色 / 浅色**三档，设置页即时切换、不打断练习。深色是冷墨蓝 + 暖米金，浅色是宣纸米白 + 赭金，保持同一套层次、不加花哨配色 |
 | 交互 | 菜单是**侧滑抽屉**（边缘手势 / 点遮罩 / 返回收起）；系统返回键逐层回退，主页再按一次才退出；时长设置位于卡片顶部、铃声在下 |
 | 首屏克制 | 预设**不占主屏常驻空间**——只有顶栏一个书签图标，点开才出现底部面板。选预设是高频、保存 / 管理是低频，两者不放同一层级；时间设置区始终留在首屏 |
 | 关于 | 版本、作者、邮箱、微信、公众号、**开源地址**、许可、隐私政策、素材说明（离线可读） |
 | **打赏** | 「加微信打赏」：点一下复制微信号并唤起微信。**不内嵌支付、不展示收款码**，本应用不处理任何付款 |
-| 全面屏 | 用系统 `WindowInsets.safeDrawing`（statusBars + displayCutout + navigationBars）统一适配挖孔 / 刘海 / 曲面 / 横竖屏，**不按机型硬编码** |
+| 全面屏 / 尺寸 | 用系统 `WindowInsets.safeDrawing`（statusBars + displayCutout + navigationBars）避开挖孔 / 刘海 / 曲面；内容列按最大宽度居中收敛、圆环随屏宽与横竖屏自适应、抽屉与铃声网格自适应。**不按机型硬编码**；折叠屏铰链感知 / 双栏布局复杂度高，当前不做（本项未做真机专项测试） |
+| 零授权请求 | 代码中没有任何 `requestPermissions` 调用：不弹网络 / 位置 / 通讯录 / 相机 / 麦克风 / 存储 / 账号登录授权框；三条前台服务 / 通知权限只是清单声明 |
 
-**权限**：主动申请 3 条（`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`），全为前台保活所需；打包时 Android 会自动追加 1 条 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，不是我们申请的。**无 INTERNET**，无位置 / 通讯录 / 相机 / 录音 / 健康数据 / 广告 ID / 内购。manifest 里的 `<queries>` 是 Android 11+ 包可见性声明，不是权限。
+**权限 / 无任何授权请求**：清单只声明 3 条（`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`），全为前台保活所需；打包时 Android 会自动追加 1 条 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，不是我们申请的。**应用从不调用 `requestPermissions`，不会向用户弹出任何授权框**——包括通知权限，拒绝或忽略都不影响计时与铃声。**无 INTERNET**，无位置 / 通讯录 / 相机 / 录音 / 健康数据 / 广告 ID / 内购。manifest 里的 `<queries>` 是 Android 11+ 包可见性声明，不是权限。
 
 ---
 
@@ -107,7 +121,7 @@ adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png
 adb logcat -d | grep -i stilltimer
 ```
 
-v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×2340 @440dpi）** 上实装验证：启动、控件树、抽屉、返回栈、截图与崩溃日志。**注意**：Android 15+ 才强制 edge-to-edge，低版本设备测不出顶部 insets 的最终效果，目标机红米 15 Pro 上的表现仍需目视确认。
+v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×2340 @440dpi）** 上实装验证：启动、控件树、抽屉、返回栈、截图与崩溃日志。**注意**：Android 15+ 才强制 edge-to-edge，低版本设备测不出顶部 insets 的最终效果，目标机红米 15 Pro 上的表现仍需目视确认；不同屏幕尺寸 / 折叠屏的适配按项目所有者要求**未做真机专项测试**。
 
 ---
 
@@ -129,7 +143,17 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 | 邮箱 | <luoxu_disk@163.com> |
 | 微信 | `pingyishufang` |
 | 公众号 | 何处青山不道场 |
-| 开源地址 | <https://github.com/yaohui-git/zeatimer> |
+| 开源地址 | <https://github.com/yaohui-git/zentimer> |
+
+## 定制与合作
+
+**支持定制。** 寺院、道观等非营利组织可享**优惠或免费**定制；其他用途另议。
+
+可定制范围：应用名称、启动图标、主题配色、铃声与背景音、默认时长 / 准备 / 间隔方案、界面文案与「关于」页信息。定制版同样守住三条底线：**离线、无任何授权请求、无广告**，并保持极简禅意。
+
+联系：耀慧 · <luoxu_disk@163.com> · 微信 `pingyishufang` · 公众号「何处青山不道场」。
+
+**English:** Custom builds are welcome. Temples, Taoist centres, monasteries and other non-profit organisations receive **discounted or free** customisation; all other uses are quoted individually. Name, icon, palette, bells, default durations and wording can be tailored — always offline, permission-prompt-free and ad-free.
 
 ---
 
@@ -146,7 +170,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 ## 隐私
 
-不联网、不收集任何数据、不含第三方 SDK。所有设置与预设只存在本机 SharedPreferences。完整政策见 [`PRIVACY-POLICY.md`](PRIVACY-POLICY.md)。
+不联网、不收集任何数据、不含第三方 SDK、不弹任何授权框。语言 / 主题色偏好、设置与预设只存在本机 SharedPreferences，卸载即清除。完整政策见 [`PRIVACY-POLICY.md`](PRIVACY-POLICY.md)。
 
 ---
 
@@ -154,7 +178,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 ```
 StillTimer/            Android 工程（Gradle + Kotlin + Compose，单模块）
-  app/src/main/java/   状态机、音频、语言、预设、前台服务、单 Activity UI
+  app/src/main/java/   状态机、音频、语言、主题色、预设、前台服务、单 Activity UI
   app/src/main/res/    三语 strings、配色、主题、启动图标、声音与图片素材
 tools/                 图标生成、素材隐私开关、开源目录打包、三语文案对账
 assets/                启动图标 512

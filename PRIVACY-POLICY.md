@@ -1,7 +1,7 @@
 # 隐私政策 / Privacy Policy
 
 **生效日期 / Effective date:** 2026-11-08
-**适用 / Applies to:** 静息 · Still（`com.stilltimer.personal`），Android 版 · v2.3
+**适用 / Applies to:** 静息 · zentimer（一款极简禅意冥想计时器 / A minimal Zen meditation timer，`com.stilltimer.personal`），Android 版 · v2.3
 
 ---
 
@@ -20,12 +20,15 @@
 
 应用 **没有** `INTERNET` 权限，因此技术上无法把任何数据发送到网络。也没有位置、通讯录、相机、麦克风、短信、存储读写、健康数据、广告 ID、内购或账号权限。
 
+**应用从不主动发起任何运行时权限请求**：代码里没有 `requestPermissions` 调用，不会向用户弹出网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框，连上表中的通知权限也不会弹框。上表三条权限只是清单声明，用于前台保活；忽略或拒绝不影响计时与铃声。
+
 清单里的 `<queries>` 只声明「本应用需要看见系统里是否安装了邮件、浏览器、微信客户端」，属于 Android 11+ 的包可见性声明，**不是权限**，不授予任何设备能力。
 
 ### 本机存储的数据
 以下数据只写入本应用的私有 `SharedPreferences`，不备份到云端、不共享给其他应用、不用于分析：
 
-- 语言偏好（简体 / 繁体 / English）
+- 语言偏好（简体 / 繁体 / English）与「是否手动选择过语言」的标记（用于默认跟随系统）
+- 主题色偏好（跟随系统 / 深色 / 浅色）
 - 时长、准备时间、间隔铃、三种铃声、背景音、响铃次数
 - 用户保存的预设组合（名称与上述设置值）
 - 最近应用的一套预设 ID（仅用于在预设面板里高亮「已选」，不含任何个人内容）
@@ -61,12 +64,15 @@
 
 The app has **no `INTERNET` permission**, so it technically cannot transmit data. It also has no location, contacts, camera, microphone, SMS, external storage, health, advertising ID, billing, or account permissions.
 
+**The app never requests any runtime permission**: there is no `requestPermissions` call, so no prompt for network, location, contacts, camera, microphone, storage, account or sign-in — not even for the notification permission listed above. Those three manifest entries exist only to keep the foreground service alive; ignoring them affects nothing but the notification.
+
 The `<queries>` entries in the manifest only declare package visibility (mail, browser, WeChat) on Android 11+. They are **not permissions** and grant no device capabilities.
 
 ### On-device data
 Only these values are stored in the app's private `SharedPreferences`, never synced or shared:
 
-- Language preference (Simplified Chinese / Traditional Chinese / English)
+- Language preference (Simplified / Traditional Chinese / English) and a flag indicating whether the user chose it manually (used for the follow-system default)
+- Theme preference (system / dark / light)
 - Duration, preparation time, interval, the three bell choices, ambient sound, ring counts
 - Saved presets (name + the settings above)
 - The ID of the most recently applied preset (only to highlight it in the preset sheet; contains no personal content)

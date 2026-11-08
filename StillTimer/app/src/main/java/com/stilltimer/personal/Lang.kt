@@ -29,32 +29,58 @@ object Lang {
     val isEn: Boolean get() = _mode.value == Mode.EN
 
     const val KEY_LANG = "lang"
+    private const val KEY_LANG_MANUAL = "lang_manual"
 
     fun init(ctx: Context) {
-        val saved = ctx.prefs().getString(KEY_LANG, null)
-        _mode.value = when (saved) {
-            "hans", "zh" -> Mode.HANS
-            "hant" -> Mode.HANT
-            "en" -> Mode.EN
-            else -> defaultFromSystem().also {
-                ctx.prefs().edit().putString(KEY_LANG, it.code).apply()
+        val prefs = ctx.prefs()
+        val saved = prefs.getString(KEY_LANG, null)
+        val manual = prefs.getBoolean(KEY_LANG_MANUAL, false)
+        _mode.value = if (manual && saved != null) {
+            // 用户手动选过：以选择为准，系统语言变了也不覆盖
+            when (saved) {
+                "hans", "zh" -> Mode.HANS
+                "hant" -> Mode.HANT
+                "en" -> Mode.EN
+                else -> defaultFromSystem()
             }
+        } else {
+            // 没手动选过：每次启动都按当前系统语言重算，真正做到「默认跟随系统」
+            defaultFromSystem().also { prefs.edit().putString(KEY_LANG, it.code).apply() }
         }
     }
 
+    /**
+     * 默认语言跟随系统：简体中文 → HANS，繁体中文 → HANT，
+     * 其余所有语言（English、日语、法语、韩语……）一律 EN，让国际友人开箱即用。
+     */
     private fun defaultFromSystem(): Mode {
         val l = Resources.getSystem().configuration.locales[0]
+        if (l.language != "zh") return Mode.EN
         val tag = l.toLanguageTag().lowercase(Locale.ROOT)
+        val script = l.script.lowercase(Locale.ROOT)
+        val country = l.country.uppercase(Locale.ROOT)
         return when {
-            l.language == "en" -> Mode.EN
-            tag.contains("hant") || l.country.uppercase(Locale.ROOT) in setOf("TW", "HK", "MO") -> Mode.HANT
+            script == "hant" || tag.contains("hant") || country in setOf("TW", "HK", "MO") -> Mode.HANT
             else -> Mode.HANS
         }
     }
 
     fun set(ctx: Context, m: Mode) {
         _mode.value = m
-        ctx.prefs().edit().putString(KEY_LANG, m.code).apply()
+        ctx.prefs().edit()
+            .putString(KEY_LANG, m.code)
+            .putBoolean(KEY_LANG_MANUAL, true)
+            .apply()
+    }
+
+    /** 设置页「跟随系统」：清掉手动标记，立即按系统语言重新判定。 */
+    fun followSystem(ctx: Context) {
+        val m = defaultFromSystem()
+        _mode.value = m
+        ctx.prefs().edit()
+            .putBoolean(KEY_LANG_MANUAL, false)
+            .putString(KEY_LANG, m.code)
+            .apply()
     }
 
     fun t(key: String): String {
@@ -182,7 +208,7 @@ object Lang {
         "lang_hans" to "简体",
         "lang_hant" to "繁体",
         "lang_en" to "English",
-        "settings_language_note" to "切换即时生效，不会打断正在进行的练习",
+        "settings_language_note" to "首次默认跟随系统：简体 / 繁体 / 其他语言为 English；切换不打断练习",
         "settings_bell_times" to "铃声右侧的 ×N 可轻触切换响铃次数",
         // 预设
         "preset_empty" to "还没有保存的组合",
@@ -258,7 +284,7 @@ object Lang {
         "lang_hans" to "簡體",
         "lang_hant" to "繁體",
         "lang_en" to "English",
-        "settings_language_note" to "切換即時生效，不會中斷正在進行的練習",
+        "settings_language_note" to "首次預設跟隨系統：簡體 / 繁體 / 其他語言為 English；切換不中斷練習",
         "settings_bell_times" to "鈴聲右側的 ×N 可輕觸切換響鈴次數",
         "preset_empty" to "還沒有儲存的組合",
         "preset_empty_hint" to "調好時長與鈴聲後，點下方按鈕儲存",
@@ -331,7 +357,7 @@ object Lang {
         "lang_hans" to "简体中文",
         "lang_hant" to "繁體中文",
         "lang_en" to "English",
-        "settings_language_note" to "Applies instantly, without interrupting a session",
+        "settings_language_note" to "Follows the system on first launch; other locales default to English. Switching never interrupts a session.",
         "settings_bell_times" to "Tap ×N next to a bell to change how many times it rings",
         "preset_empty" to "No saved combinations yet",
         "preset_empty_hint" to "Set a duration and bells, then save below",
@@ -388,7 +414,16 @@ object Lang {
         "donate_open_failed" to "没有找到微信，微信号已复制",
         "donate_hint" to "微信号已复制，打开微信粘贴搜索即可添加",
         "preset_delete_confirm" to "删除这个组合？",
-        "btn_delete_ok" to "删除"
+        "btn_delete_ok" to "删除",
+        "settings_theme" to "主题色",
+        "theme_system" to "跟随系统",
+        "theme_dark" to "深色",
+        "theme_light" to "浅色",
+        "theme_note" to "跟随系统时随手机深浅模式自动切换；切换不打断练习",
+        "lang_follow_system" to "跟随系统",
+        "about_custom" to "定制与合作",
+        "about_custom_body" to "寺院、道观等非营利组织可优惠或免费定制；其他用途另议，欢迎来信。"
+
     )
 
     private val EXTRA_HANT = mapOf(
@@ -416,7 +451,16 @@ object Lang {
         "donate_open_failed" to "找不到微信，微信號已複製",
         "donate_hint" to "微信號已複製，開啟微信貼上搜尋即可加入",
         "preset_delete_confirm" to "刪除這個組合？",
-        "btn_delete_ok" to "刪除"
+        "btn_delete_ok" to "刪除",
+        "settings_theme" to "主題色",
+        "theme_system" to "跟隨系統",
+        "theme_dark" to "深色",
+        "theme_light" to "淺色",
+        "theme_note" to "跟隨系統時隨手機深淺模式自動切換；切換不中斷練習",
+        "lang_follow_system" to "跟隨系統",
+        "about_custom" to "客製與合作",
+        "about_custom_body" to "寺院、道觀等非營利組織可優惠或免費客製；其他用途另議，歡迎來信。"
+
     )
 
     private val EXTRA_EN = mapOf(
@@ -444,6 +488,15 @@ object Lang {
         "donate_open_failed" to "WeChat not found — the ID has been copied",
         "donate_hint" to "WeChat ID copied — paste it in WeChat to add the author",
         "preset_delete_confirm" to "Delete this preset?",
-        "btn_delete_ok" to "Delete"
+        "btn_delete_ok" to "Delete",
+        "settings_theme" to "Theme",
+        "theme_system" to "System",
+        "theme_dark" to "Dark",
+        "theme_light" to "Light",
+        "theme_note" to "Follows your device dark mode. Switching never interrupts a session.",
+        "lang_follow_system" to "Follow system",
+        "about_custom" to "Custom builds",
+        "about_custom_body" to "Temples, monasteries and other non-profits: discounted or free. Other uses quoted individually."
+
     )
 }

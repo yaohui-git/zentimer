@@ -1,6 +1,37 @@
 # 更新日志 / Changelog
 
-> **协议与仓库地址**：v2.3 发布起采用 **Apache-2.0**（`LICENSE` 标准全文 + `NOTICE.md` 素材例外），仓库 <https://github.com/yaohui-git/zeatimer>。下方早期记录中提到 MIT、开源地址「待定」处均为当时状态，**以当前 `LICENSE` / `NOTICE.md` / `AppInfo.kt` 为准**。
+> **协议与仓库地址**：v2.3 发布起采用 **Apache-2.0**（`LICENSE` 标准全文 + `NOTICE.md` 素材例外），仓库 <https://github.com/yaohui-git/zentimer>。下方早期记录中提到 MIT、开源地址「待定」处均为当时状态，**以当前 `LICENSE` / `NOTICE.md` / `AppInfo.kt` 为准**。
+
+## v2.3 修订五（versionCode 4，2026-11-08，仓库改名）
+
+- GitHub 仓库 `zeatimer` → **`zentimer`**，新地址 <https://github.com/yaohui-git/zentimer>（旧地址 301 重定向）
+- `AppInfo.REPO` 同步，重编译后关于页开源地址显示新链接；README / NOTICE / ASSETS-NOTICE / CHANGELOG / 商店文案 / Pages URL 全部统一
+- **App 名称未改动**（工程内 `app_name` 资源仍为「静息 / 靜息 / Still」）
+
+---
+
+## v2.3 修订四（versionCode 4，2026-11-08，主题 / 尺寸 / 说明 / 国际友人）
+
+**新增配置**
+- 主题色三档：跟随系统 / 深色 / 浅色。新增 `Theme.kt`（StateFlow + SharedPreferences），`MainActivity.kt` 增加 `StillTheme` 与深浅两套色板，色板经 `CompositionLocal` 注入，140 处 `C.xxx` 调用点零改动；浅色同步翻转状态栏图标、不铺星空底图
+- 设置页新增主题三档按钮；三语文案 95 → **103 条**，`check_lang.py` 对账通过
+
+**语言默认跟随系统（支持国际友人）**
+- `Lang.defaultFromSystem()` 旧逻辑把非中文系统也归到简体；改为简体→HANS、繁体→HANT、**其余语言一律 EN**
+- 新增 `lang_manual` 标记：未手动选过时每次启动重算系统默认；手动选过则尊重用户选择
+- 设置页说明行右侧新增「↺ 跟随系统」小入口（不新增常驻控件层级），点了清标记并即时重判
+
+**屏幕尺寸轻量适配（未做真机专项测试）**
+- 内容列 `.widthIn(max = 560.dp)` + 居中；圆环 `ringSize()` 按最短边与横竖屏收敛（常规竖屏仍 268dp）
+- 抽屉宽度按屏宽 84% 且不超过 300dp；铃声网格 `GridCells.Adaptive(150dp)`
+- 折叠屏铰链感知 / 双栏布局复杂度高，按项目所有者判断不做
+
+**说明文件与关于页**
+- **App 名称未改动**（工程资源零改动）；说明文件应用名称统一「静息 / zentimer」，「极简禅意冥想计时器 / Minimal Zen Meditation Timer」降为定位描述；补进极简风、**从无任何运行时授权请求**、主题三档、尺寸适配、语言默认
+- 新增「定制与合作」：寺院、道观等非营利组织优惠或免费，其他另议；README / 商店文案 / 关于页 / CONTRIBUTING 同步
+- 隐私政策补记主题色与语言偏好为纯本机数据
+
+---
 
 ## v2.3 修订（versionCode 4，2026-11-08，开源发布版）
 
@@ -13,7 +44,7 @@
 
 **开源发布**
 - 协议 MIT → **Apache-2.0**；`NOTICE.md` 逐项声明 23 段录音 / 36 张图片不在授权范围内
-- `AppInfo.REPO` 填入 <https://github.com/yaohui-git/zeatimer>，关于页显示可点链接；三语许可文案同步
+- `AppInfo.REPO` 填入 <https://github.com/yaohui-git/zentimer>，关于页显示可点链接；三语许可文案同步
 - 新增 `README.md`（含打赏与联系方式）、`CONTRIBUTING.md`、Issue / PR 模板、logo、真机截图、`releases/` APK
 - 真机 M2003J15SC（Android 12 / SDK 31）验证：安装、抽屉、返回栈、试听、计时、关于页、截图、崩溃日志
 

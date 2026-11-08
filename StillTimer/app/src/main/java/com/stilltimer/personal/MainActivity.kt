@@ -4,6 +4,7 @@ package com.stilltimer.personal
 
 import android.app.Activity
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -32,7 +33,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -40,26 +43,61 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** 冷墨蓝底 + 暖米金强调：沿用原版深色静谧调性，颜色与图片整体改换。 */
+/**
+ * 两套禅意色板：深色沿用原版冷墨蓝 + 暖米金；浅色换成宣纸米白 + 赭金，
+ * 保持同样的「底 / 浮起 / 卡片 / 强调 / 次级」层次，不做花哨配色。
+ */
+private data class StillColors(
+    val bg: Color, val elevated: Color, val card: Color,
+    val accent: Color, val accentDim: Color, val text: Color,
+    val secondary: Color, val track: Color, val stroke: Color,
+    val divider: Color, val isDark: Boolean
+)
+
+private val DarkPalette = StillColors(
+    bg = Color(0xFF080D14), elevated = Color(0xFF101923), card = Color(0xFF16222E),
+    accent = Color(0xFFE8CFA0), accentDim = Color(0xFF8C7E63),
+    text = Color(0xFFF3F0E9), secondary = Color(0xFF8C9BAA),
+    track = Color(0xFF1F2D3A), stroke = Color(0xFF2B3A48),
+    divider = Color(0xFF1B2834), isDark = true
+)
+
+private val LightPalette = StillColors(
+    bg = Color(0xFFF6F1E6), elevated = Color(0xFFFFFBF3), card = Color(0xFFEFE7D8),
+    accent = Color(0xFF8A6528), accentDim = Color(0xFFA8916C),
+    text = Color(0xFF2C2620), secondary = Color(0xFF796F61),
+    track = Color(0xFFDED4C0), stroke = Color(0xFFD3C8B2),
+    divider = Color(0xFFE3DAC9), isDark = false
+)
+
+private val LocalStillColors = staticCompositionLocalOf { DarkPalette }
+
+/**
+ * 保留 C.xxx 这一层：140 处调用点一行都不用改，颜色由 StillTheme 按主题注入。
+ * 只有两处 Canvas 的 DrawScope 不是 Composable 上下文，那里在绘制前先取局部变量。
+ */
 private object C {
-    val bg = Color(0xFF080D14)
-    val elevated = Color(0xFF101923)
-    val card = Color(0xFF16222E)
-    val accent = Color(0xFFE8CFA0)
-    val accentDim = Color(0xFF8C7E63)
-    val text = Color(0xFFF3F0E9)
-    val secondary = Color(0xFF8C9BAA)
-    val track = Color(0xFF1F2D3A)
-    val stroke = Color(0xFF2B3A48)
-    val divider = Color(0xFF1B2834)
+    val bg: Color @Composable get() = LocalStillColors.current.bg
+    val elevated: Color @Composable get() = LocalStillColors.current.elevated
+    val card: Color @Composable get() = LocalStillColors.current.card
+    val accent: Color @Composable get() = LocalStillColors.current.accent
+    val accentDim: Color @Composable get() = LocalStillColors.current.accentDim
+    val text: Color @Composable get() = LocalStillColors.current.text
+    val secondary: Color @Composable get() = LocalStillColors.current.secondary
+    val track: Color @Composable get() = LocalStillColors.current.track
+    val stroke: Color @Composable get() = LocalStillColors.current.stroke
+    val divider: Color @Composable get() = LocalStillColors.current.divider
+    val isDark: Boolean @Composable get() = LocalStillColors.current.isDark
 }
 
 /** 三个子页共用一套顶栏与返回逻辑；主页不再堆底部导航，保持禅意留白。 */
@@ -68,22 +106,13 @@ private enum class Screen { PRESETS, SETTINGS, ABOUT }
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        TimerEngine.init(this)
+        TimerEngine.init(this)   // 内部调用 Lang.init(app)
+        Theme.init(this)
         // Android 15+（targetSdk >= 35）强制 edge-to-edge：内容会画到状态栏/挖孔之下。
         // 这里不按机型硬编码，改由 Compose 的 safeDrawing insets 在内容层统一避开，
         // 背景星空图仍铺满整屏，视觉上仍是沉浸式。
         setContent {
-            MaterialTheme(
-                colorScheme = darkColorScheme(
-                    background = C.bg,
-                    surface = C.elevated,
-                    primary = C.accent,
-                    onPrimary = C.bg,
-                    onSurface = C.text
-                )
-            ) {
-                StillScreen()
-            }
+            StillTheme { StillScreen() }
         }
     }
 
@@ -92,6 +121,48 @@ class MainActivity : ComponentActivity() {
         // v2.3：练习进行中退出界面时不能释放音频——前台服务还在跑，背景音与结束铃都要留给它。
         // 以前无条件 releaseAudio()，按返回退出后背景音会悄悄停掉。
         if (isFinishing && !TimerEngine.ui.value.running) TimerEngine.releaseAudio()
+    }
+}
+
+/**
+ * 主题总入口：把色板注入 CompositionLocal，再交给 MaterialTheme。
+ * 切换只重组界面，不重建 Activity、不打断计时；「跟随系统」用 isSystemInDarkTheme()，
+ * 系统切换深浅模式会自动重组。浅色底同时把状态栏图标翻成深色，避免白底白字。
+ */
+@Composable
+private fun StillTheme(content: @Composable () -> Unit) {
+    val mode by Theme.mode.collectAsState()
+    val dark = when (mode) {
+        Theme.Mode.DARK -> true
+        Theme.Mode.LIGHT -> false
+        Theme.Mode.SYSTEM -> isSystemInDarkTheme()
+    }
+    val palette = if (dark) DarkPalette else LightPalette
+    val view = LocalView.current
+    val ctx = LocalContext.current
+
+    SideEffect {
+        val window = (ctx as? Activity)?.window ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.isAppearanceLightStatusBars = !dark
+        controller.isAppearanceLightNavigationBars = !dark
+    }
+
+    CompositionLocalProvider(LocalStillColors provides palette) {
+        MaterialTheme(
+            colorScheme = if (dark) {
+                darkColorScheme(
+                    background = palette.bg, surface = palette.elevated,
+                    primary = palette.accent, onPrimary = palette.bg, onSurface = palette.text
+                )
+            } else {
+                lightColorScheme(
+                    background = palette.bg, surface = palette.elevated,
+                    primary = palette.accent, onPrimary = palette.bg, onSurface = palette.text
+                )
+            },
+            content = content
+        )
     }
 }
 
@@ -105,6 +176,9 @@ private fun StillScreen() {
     val activity = ctx as? Activity
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    // 轻量尺寸适配：列宽与抽屉按屏宽收敛；不做折叠屏铰链感知 / 双栏（复杂度高）
+    val cfg = LocalConfiguration.current
+    val drawerWidth = minOf(300, (cfg.screenWidthDp * 0.84f).toInt()).dp
 
     var screen by remember { mutableStateOf<Screen?>(null) }
     var picker by remember { mutableStateOf<String?>(null) }
@@ -160,7 +234,7 @@ private fun StillScreen() {
             drawerContent = {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     ModalDrawerSheet(
-                        modifier = Modifier.width(300.dp),
+                        modifier = Modifier.width(drawerWidth),
                         drawerContainerColor = C.elevated
                     ) {
                         DrawerContent(
@@ -180,7 +254,8 @@ private fun StillScreen() {
                         .background(C.bg)
                 ) {
                     // 沉浸背景铺满全屏是刻意的；前景内容另由 safeDrawingPadding 避开系统栏
-                    if (running) {
+                    // 星空底图只在深色主题铺；浅色留一片干净的宣纸底，避免脏灰
+                    if (running && C.isDark) {
                         Image(
                             painter = painterResource(R.drawable.bg_stars),
                             contentDescription = null,
@@ -193,10 +268,11 @@ private fun StillScreen() {
                         null -> if (running) {
                             Column(
                                 modifier = Modifier
-                                    .fillMaxSize()
+                                    .align(Alignment.Center)
+                                    .fillMaxWidth()
+                                    .widthIn(max = 560.dp)
                                     .safeDrawingPadding()
                                     .padding(horizontal = 24.dp),
-                                verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 RingBlock(s)
@@ -206,7 +282,9 @@ private fun StillScreen() {
                         } else {
                             Column(
                                 modifier = Modifier
-                                    .fillMaxSize()
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .widthIn(max = 560.dp)
                                     .safeDrawingPadding()
                                     .verticalScroll(rememberScrollState())
                                     .padding(horizontal = 20.dp, vertical = 16.dp),
@@ -229,7 +307,9 @@ private fun StillScreen() {
                         }
                         else -> Column(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .widthIn(max = 560.dp)
                                 .safeDrawingPadding()
                                 .verticalScroll(rememberScrollState())
                                 .padding(horizontal = 20.dp, vertical = 16.dp)
@@ -251,7 +331,7 @@ private fun StillScreen() {
                                     onSave = { saveDialog = true },
                                     onDelete = { confirmDelete = it }
                                 )
-                                Screen.SETTINGS -> SettingsPage(ctx)
+                                Screen.SETTINGS -> SettingsPage(ctx, onToast = { toast = it })
                                 Screen.ABOUT -> AboutPage(ctx, onToast = { toast = it })
                                 null -> Unit
                             }
@@ -389,6 +469,8 @@ private fun BookmarkIcon(onClick: () -> Unit) {
             .clickable(onClickLabel = Lang.t("preset_quick"), onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
+        // DrawScope 不是 Composable 上下文，颜色先在外面取好
+        val accent = C.accent
         Canvas(modifier = Modifier.size(15.dp)) {
             val w = size.width
             val h = size.height
@@ -400,7 +482,7 @@ private fun BookmarkIcon(onClick: () -> Unit) {
                 lineTo(w * 0.20f, h)
                 close()
             }
-            drawPath(path, color = C.accent, style = Stroke(width = 1.6.dp.toPx()))
+            drawPath(path, color = accent, style = Stroke(width = 1.6.dp.toPx()))
         }
     }
 }
@@ -555,7 +637,7 @@ private fun RingBlock(s: TimerEngine.Ui) {
     }
 
     Box(
-        modifier = Modifier.size(268.dp),
+        modifier = Modifier.size(ringSize()),
         contentAlignment = Alignment.Center
     ) {
         RingCanvas(s.progress)
@@ -582,6 +664,10 @@ private fun RingBlock(s: TimerEngine.Ui) {
 
 @Composable
 private fun RingCanvas(progress: Float) {
+    // DrawScope 不是 Composable 上下文，先把色板读成局部变量再进 Canvas
+    val accent = C.accent
+    val track = C.track
+    val dot = C.text
     Canvas(modifier = Modifier.fillMaxSize()) {
         val stroke = 5.dp.toPx()
         val inset = stroke * 2f
@@ -590,7 +676,7 @@ private fun RingCanvas(progress: Float) {
 
         if (progress > 0f) {
             drawArc(
-                color = C.accent.copy(alpha = 0.10f),
+                color = accent.copy(alpha = 0.10f),
                 startAngle = -90f,
                 sweepAngle = 360f * progress,
                 useCenter = false,
@@ -600,7 +686,7 @@ private fun RingCanvas(progress: Float) {
             )
         }
         drawArc(
-            color = C.track,
+            color = track,
             startAngle = 0f,
             sweepAngle = 360f,
             useCenter = false,
@@ -610,7 +696,7 @@ private fun RingCanvas(progress: Float) {
         )
         if (progress > 0.001f) {
             drawArc(
-                color = C.accent,
+                color = accent,
                 startAngle = -90f,
                 sweepAngle = 360f * progress,
                 useCenter = false,
@@ -624,9 +710,22 @@ private fun RingCanvas(progress: Float) {
             val angle = Math.toRadians((-90.0 + 360.0 * progress))
             val px = cx + radius * cos(angle).toFloat()
             val py = cy + radius * sin(angle).toFloat()
-            drawCircle(color = C.accent.copy(alpha = 0.22f), radius = stroke * 2.1f, center = Offset(px, py))
-            drawCircle(color = C.text, radius = stroke * 0.62f, center = Offset(px, py))
+            drawCircle(color = accent.copy(alpha = 0.22f), radius = stroke * 2.1f, center = Offset(px, py))
+            drawCircle(color = dot, radius = stroke * 0.62f, center = Offset(px, py))
         }
+    }
+}
+
+/** 圆环按最短边与横竖屏收敛：小屏不撑破、横屏不挤掉按钮，常规竖屏保持 268dp 不变。 */
+@Composable
+private fun ringSize(): Dp {
+    val cfg = LocalConfiguration.current
+    val shortest = minOf(cfg.screenWidthDp, cfg.screenHeightDp)
+    return when {
+        cfg.orientation == Configuration.ORIENTATION_LANDSCAPE -> 200.dp
+        shortest < 330 -> 190.dp
+        shortest < 365 -> 220.dp
+        else -> 268.dp
     }
 }
 
@@ -1030,7 +1129,7 @@ private fun SoundPicker(key: String, s: TimerEngine.Ui, onDismiss: () -> Unit) {
             Text(text = Lang.t("picker_hint"), color = C.secondary, fontSize = 12.sp)
             Spacer(Modifier.height(14.dp))
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(minSize = 150.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.weight(1f)
@@ -1316,8 +1415,10 @@ private fun SavePresetDialog(ctx: Context, onDismiss: () -> Unit, onDone: (Strin
 // ---------- 设置 ----------
 
 @Composable
-private fun SettingsPage(ctx: Context) {
+private fun SettingsPage(ctx: Context, onToast: (String) -> Unit) {
     val cur by Lang.mode.collectAsState()
+    val themeMode by Theme.mode.collectAsState()
+
     SectionLabel(Lang.t("settings_language"))
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1348,9 +1449,63 @@ private fun SettingsPage(ctx: Context) {
             }
         }
     }
-    Spacer(Modifier.height(16.dp))
-    Text(text = Lang.t("settings_language_note"), color = C.secondary, fontSize = 12.sp)
-    Spacer(Modifier.height(32.dp))
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = Lang.t("settings_language_note"),
+            color = C.secondary,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        // 「跟随系统」只占说明行右侧一小块，不新增常驻控件层级
+        Text(
+            text = "\u21ba " + Lang.t("lang_follow_system"),
+            color = C.accent,
+            fontSize = 12.sp,
+            modifier = Modifier.clickable {
+                Lang.followSystem(ctx)
+                onToast(Lang.t("lang_follow_system"))
+            }.padding(6.dp)
+        )
+    }
+    Spacer(Modifier.height(28.dp))
+    HorizontalDivider(thickness = 1.dp, color = C.divider)
+    Spacer(Modifier.height(24.dp))
+
+    SectionLabel(Lang.t("settings_theme"))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        listOf(
+            Theme.Mode.SYSTEM to Lang.t("theme_system"),
+            Theme.Mode.DARK to Lang.t("theme_dark"),
+            Theme.Mode.LIGHT to Lang.t("theme_light")
+        ).forEach { (mode, label) ->
+            val on = themeMode == mode
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (on) C.accent else C.elevated)
+                    .border(1.dp, if (on) C.accent else C.stroke, RoundedCornerShape(16.dp))
+                    .clickable { Theme.set(ctx, mode) }
+                    .padding(vertical = 18.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    color = if (on) C.bg else C.text,
+                    fontSize = 14.sp,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Text(text = Lang.t("theme_note"), color = C.secondary, fontSize = 12.sp)
+    Spacer(Modifier.height(28.dp))
     HorizontalDivider(thickness = 1.dp, color = C.divider)
     Spacer(Modifier.height(24.dp))
     Text(text = Lang.t("settings_bell_times"), color = C.secondary, fontSize = 13.sp)
@@ -1440,6 +1595,15 @@ private fun AboutPage(ctx: Context, onToast: (String) -> Unit) {
     AboutBlock(Lang.t("about_assets"), Lang.t("about_assets_body"))
     Spacer(Modifier.height(8.dp))
     Text(text = Lang.t("about_offline_note"), color = C.accentDim, fontSize = 11.sp)
+    Spacer(Modifier.height(22.dp))
+    Text(text = Lang.t("about_custom"), color = C.secondary, fontSize = 12.sp)
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text = Lang.t("about_custom_body"),
+        color = C.accentDim,
+        fontSize = 11.sp,
+        lineHeight = 17.sp
+    )
 }
 
 /** 一栏放下四项联系信息：2×2 紧凑网格，点某一项仍保留原来的复制 / 邮件动作。 */

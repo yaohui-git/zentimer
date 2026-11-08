@@ -1,6 +1,6 @@
 # NOTICE
 
-**静息 · Still / zeatimer**
+**静息 · zentimer**
 Copyright 2026 耀慧 (Yaohui) and contributors
 
 本文件是 Apache License 2.0 第 4(d) 条所要求的归属与例外声明。**它与 [LICENSE](LICENSE) 一起阅读**；两者冲突时，以本文件对「哪些文件不在授权范围内」的界定为准。
@@ -44,11 +44,11 @@ python tools/asset_privacy.py strip    # 原件移到本地 assets-private/，�
 
 ## 5. 与上游的关系
 
-本项目是**学习性质的高仿精简实现**，与 Insight Timer / spotlightsix **无任何关联、无授权、无背书**。应用名称「静息 / Still」、图标与描述文案均不含原版品牌字样。
+本项目是**学习性质的高仿精简实现**，与 Insight Timer / spotlightsix **无任何关联、无授权、无背书**。应用名称「静息 / zentimer」、图标与描述文案均不含原版品牌字样。
 
 第三方商标、产品名称归各自权利人所有。本文件不构成任何法律意见；涉及权利判断请自行咨询专业人士。
 
 ---
 
 联系方式：耀慧 · <luoxu_disk@163.com> · 微信 `pingyishufang` · 公众号「何处青山不道场」
-开源地址：<https://github.com/yaohui-git/zeatimer>
+开源地址：<https://github.com/yaohui-git/zentimer>
