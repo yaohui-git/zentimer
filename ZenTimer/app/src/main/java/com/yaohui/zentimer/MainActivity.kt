@@ -2,14 +2,22 @@
 
 package com.yaohui.zentimer
 
+import android.Manifest
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
@@ -104,6 +112,13 @@ private object C {
 private enum class Screen { PRESETS, SETTINGS, ABOUT }
 
 class MainActivity : ComponentActivity() {
+
+    /** 只在本次进程里问一次，避免反复弹窗。 */
+    private var askedNotifPerm = false
+
+    private val notifPermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TimerEngine.init(this)   // 内部调用 Lang.init(app)
@@ -114,6 +129,34 @@ class MainActivity : ComponentActivity() {
         setContent {
             StillTheme { StillScreen() }
         }
+    }
+
+    /**
+     * 计时进行中才允许界面盖在锁屏之上：锁屏时点通知 / 状态栏胶囊，直接看到倒计时，
+     * 不必先解锁。系统闹钟的响铃界面用的就是这条（setShowWhenLocked）。
+     * 没有在计时就不放行，避免应用在锁屏上被无意唤起。
+     */
+    private fun applyLockScreenVisibility() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return
+        setShowWhenLocked(TimerEngine.ui.value.running)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyLockScreenVisibility()
+        askNotificationPermission()
+    }
+
+    /**
+     * Android 13 起，通知权限默认是关闭的；不授予的话，通知栏和锁屏上一条通知都没有，
+     * 状态栏胶囊更无从谈起（实测 Redmi Note 15 Pro 就是 app 级 importance=NONE）。
+     * 这是本应用唯一会弹的系统授权框，且只与「计时可见性」有关，不涉及任何数据。
+     */
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33 || askedNotifPerm) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        askedNotifPerm = true
+        runCatching { notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     }
 
     override fun onDestroy() {
@@ -1509,7 +1552,81 @@ private fun SettingsPage(ctx: Context, onToast: (String) -> Unit) {
     Spacer(Modifier.height(28.dp))
     HorizontalDivider(thickness = 1.dp, color = C.divider)
     Spacer(Modifier.height(24.dp))
+
+    // 计时通知自检：锁屏与状态栏能不能看到倒计时，取决于系统这边两三个开关。
+    // 这里直接读出真实状态，并且整块可点，一键跳到本应用的通知设置。
+    SectionLabel(Lang.t("settings_notify"))
+    val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+    val notifyOn = nm?.areNotificationsEnabled() == true
+    val channelOn = nm?.getNotificationChannel(TimerService.CHANNEL_ALARM)
+        ?.let { it.importance != NotificationManager.IMPORTANCE_NONE } ?: true
+    val liveOk = Build.VERSION.SDK_INT < 36 ||
+        runCatching { nm?.canPostPromotedNotifications() }.getOrNull() == true
+    val status = when {
+        !notifyOn -> Lang.t("notify_off")
+        !channelOn -> Lang.t("notify_channel_off")
+        else -> Lang.t("notify_on")
+    }
+    // 授权框在页面里再要一次；被永久拒绝就只能去系统设置
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (!granted) openNotificationSettings(ctx) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable {
+                if (!notifyOn && Build.VERSION.SDK_INT >= 33) {
+                    runCatching { permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+                        .onFailure { openNotificationSettings(ctx) }
+                } else {
+                    openNotificationSettings(ctx)
+                }
+            },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = C.card),
+        border = BorderStroke(1.dp, if (notifyOn && channelOn) C.stroke else C.accentDim)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = status,
+                    color = if (notifyOn && channelOn) C.text else C.accent,
+                    fontSize = 14.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (!liveOk) Lang.t("notify_live_off") else Lang.t("notify_hint"),
+                    color = C.secondary,
+                    fontSize = 12.sp
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(text = "\u203a", color = C.accentDim, fontSize = 20.sp)
+        }
+    }
+    Spacer(Modifier.height(28.dp))
+    HorizontalDivider(thickness = 1.dp, color = C.divider)
+    Spacer(Modifier.height(24.dp))
     Text(text = Lang.t("settings_bell_times"), color = C.secondary, fontSize = 13.sp)
+}
+
+/** 跳到本应用的通知设置；个别 ROM 没有该页面时退回应用详情页。 */
+private fun openNotificationSettings(ctx: Context) {
+    val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (runCatching { ctx.startActivity(i) }.isSuccess) return
+    runCatching {
+        ctx.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(android.net.Uri.parse("package:" + ctx.packageName))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
 }
 
 // ---------- 关于 ----------

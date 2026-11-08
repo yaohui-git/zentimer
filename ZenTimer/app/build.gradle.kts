@@ -29,8 +29,8 @@ android {
         targetSdk = 37
         // 版本号唯一来源。改这里即可，AppInfo 通过 BuildConfig 读，界面与安装信息不会再对不上。
         // 规则：任何一次出包（哪怕只改一行代码）都要 +1 versionCode；versionName 按 主.次 递增。
-        versionCode = 5
-        versionName = "2.4"
+        versionCode = 10
+        versionName = "2.9"
     }
 
     buildFeatures {

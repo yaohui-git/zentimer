@@ -2,6 +2,46 @@
 
 > **协议与仓库地址**：v2.3 发布起采用 **Apache-2.0**（`LICENSE` 标准全文 + `NOTICE.md` 素材例外），仓库 <https://github.com/yaohui-git/zentimer>。下方早期记录中提到 MIT、开源地址「待定」处均为当时状态，**以当前 `LICENSE` / `NOTICE.md` / `AppInfo.kt` 为准**。
 
+## v2.9（versionCode 10，2026-11-08，Android 16 实机定位：通知权限 + 隐藏 API 崩溃）
+
+用户反馈（**Redmi Note 15 Pro / Android 16 / HyperOS**）：「锁屏时的计时界面（类似系统闹钟）看不到」「切到后台顶层看不到计时插件」；另一台 **Redmi 10X 4G（Android 12）**「通知栏能看到，但按钮只有 End」。
+
+接上真机后，前两版关于锁屏的推断（系统锁屏通知开关、厂商限制）**都不是主因**，真实原因有三层：
+
+1. **一开计时就闪退**——这才是这台机器「什么都看不到」的直接原因。日志原文：
+   ```
+   hiddenapi: Accessing hidden method Landroid/app/Notification$Builder;->setRequestPromotedOngoing(Z)…(api=blocked) … denied
+   FATAL EXCEPTION: java.lang.NoSuchMethodError: No virtual method setRequestPromotedOngoing(Z)…
+       at com.yaohui.zentimer.TimerService.buildNotification
+   ```
+   该机 Android 16 里这两个方法是 **@hide**：compileSdk 37 的公开 SDK 有，设备上没有。v2.4~v2.8 直接调用，于是每次开始计时都崩进程。现改为「反射取方法 → 取不到就走 extras 通道 → 两条都不行就退回普通通知」，任何一步失败都不会影响计时与铃声。
+2. **通知权限从来没申请过**。`dumpsys notification` 里写着 `AppSettings: com.yaohui.zentimer importance=NONE userSet=false`：Android 13 起 `POST_NOTIFICATIONS` 默认不授予，而本应用为守住「零授权」一直没申请，所以**这台机器的通知栏里一条通知都没有**。10X 是 Android 12，不需要该权限，因此那边一直能看见。现在首次进入时申请一次（本应用唯一的系统授权框，只与计时可见性有关），设置页「计时通知」里也能再次发起或跳系统设置。
+3. **extras 通道实测可用**：`android.requestPromotedOngoing=true` + `android.shortCriticalText=4:07`（两个 key 取自 `NotificationCompat`），实机通知标志里出现 `PROMOTED_ONGOING`，状态栏出现倒计时胶囊、锁屏顶部出现卡片，带「暂停 / 结束」。
+
+另：通知动作按系统闹钟补齐为 **暂停 ⇄ 继续 + 结束**（原来是只有结束）。
+
+**已知限制（写清，不再反复猜）**：HyperOS 对「实时动态」的刷新有节流，胶囊里的数字不是每秒跳，暂停/恢复、跨阶段会立即刷新；胶囊与锁屏卡片都要求通知权限已授予。
+
+## v2.5（versionCode 6，2026-11-08，锁屏与状态栏计时可见性，按 AOSP Clock 实现重做）
+
+> **本节关于锁屏/胶囊的结论已被 v2.9 取代。** v2.5 读到的是「实现写法」层面的正确（AOSP Clock 确实用 `setRequestPromotedOngoing` 而不是 `setAlarmClock`），但漏掉了两件更要命的事：设备上这两个方法是 @hide（直接调用崩进程）、以及通知权限根本没授予。实现细节保留在下方作对照，结论以 v2.9 为准。
+
+**用户反馈**：「锁屏时的计时界面（类似系统闹钟）看不到」「Note 15 Pro 里切到后台，顶层看不到计时插件」。
+
+按 AOSP `packages/apps/DeskClock` 的计时器实现核对后，发现 v2.4 的做法从根上偏了：
+
+- **AOSP 的计时器不使用 `setAlarmClock`。** 它用的是「常驻通知 + `CATEGORY_ALARM` + `VISIBILITY_PUBLIC` + `setUsesChronometer` + `setChronometerCountDown` + `setRequestPromotedOngoing(true)`（`data/TimerNotificationBuilder.java`，Android 16 分支）。`setAlarmClock` 是**闹钟**（Alarm）那条线用的，套到计时器上会让系统误以为设了一个闹钟——状态栏多出闹钟图标、锁屏「下个闹钟」被改写，而且 Android 16 起该 API 已不在公开 SDK 里。本版删除。
+- **状态栏胶囊不出来的直接原因**：`setRequestPromotedOngoing(true)` 必须配合清单里的 `POST_PROMOTED_NOTIFICATIONS`（非运行时权限），缺了它系统会**静默忽略**提升请求。本版补上。
+- 补齐 AOSP 同款的通知属性：`setShowWhen(false)`（`when` 只作倒计时基准，不显示成时间戳）、`setLocalOnly(true)`、`setAutoCancel(false)`。
+- 前台服务通知默认会被系统压 10 秒才露出，补 `FOREGROUND_SERVICE_IMMEDIATE`。
+
+其余两条配套改动：
+
+- **锁屏点通知直接看倒计时**：计时进行中时界面允许显示在锁屏之上（`setShowWhenLocked`，系统闹钟响铃页同一做法），不必先解锁；没在计时就不放行。
+- **设置页新增「计时通知」自检**：读出通知总开关、计时渠道是否被关、实时动态是否可用，整块可点，一键跳到本应用的系统通知设置。
+
+**能力边界（写清楚，避免再误判）**：状态栏那枚倒计时胶囊是 Android 16「实时动态」的能力，Android 15 及以下第三方应用**没有**对应接口，只能有通知栏里的常驻通知（含系统自己走秒的倒数）。锁屏上能否看到卡片，还受系统「锁屏通知」开关控制。
+
 ## v2.4（versionCode 5，2026-11-08，版本号治理 + 本轮修复定版）
 
 **这一版首先修的是「版本号一直没变」这个流程问题。** 前几轮（修订六~九）每次出包都把 `versionCode` 留在 4、`versionName` 留在 2.3，代价是：

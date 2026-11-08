@@ -8,36 +8,40 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
-import androidx.core.app.NotificationCompat
+import android.util.Log
 
 /**
  * 前台服务驱动计时锚点 + 一条常驻通知：锁屏、切后台、Activity 被回收时铃声仍然准点。
  * 计时期间持有 PARTIAL_WAKE_LOCK，避免息屏后 CPU 进入休眠导致到点不响、亮屏才补响。
  *
- * 通知按**系统闹钟**的做法组织（不是媒体播放器那套 MediaSession 卡片）：
- * 1. 走独立的「闹钟」通知渠道（IMPORTANCE_HIGH、静音、锁屏可见），并声明为
- *    Android 的 **alarm clock** 类型通知——这是系统闹钟在锁屏、状态栏、息屏界面上
- *    被优先展示的同一机制；剩余时间用系统计时器（chronometer）自己走秒，
- *    不解锁就能看到倒数，不用本进程每秒重画。
- * 2. 通知本体可点，直接回到计时页；右侧一个「结束」按钮，锁屏上也能收工。
- * 3. Android 16+ 再额外申请状态栏「实时动态」胶囊（系统闹钟同款）。
+ * 通知形态对齐系统时钟（AOSP DeskClock）的计时器通知，而不是媒体播放器那套 MediaSession：
+ * `setOngoing(true)` + `CATEGORY_ALARM` + `VISIBILITY_PUBLIC` + `setUsesChronometer(true)`
+ * + `setChronometerCountDown(true)` + `setRequestPromotedOngoing(true)`。
+ * 前四项让锁屏按闹钟类通知展示，倒计时由系统自己走秒；最后一项是 Android 16 的「实时动态」，
+ * 系统会把这条通知顶到通知栏和锁屏顶部，并在状态栏挂一枚倒计时胶囊——系统时钟的计时器
+ * 用的就是同一个接口（需要清单里声明 POST_PROMOTED_NOTIFICATIONS）。
  *
- * 若机型不允许把前台服务通知声明成闹钟（少数 ROM 会抛异常），自动退回普通高优先级通知，
- * 功能不受影响——所以每一步都带兜底。
+ * 每一步能力都独立判断，不被支持时只降级该项，不影响计时与铃声。
  */
 class TimerService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var alive = false
     private var wakeLock: PowerManager.WakeLock? = null
-    /** 上一次发通知的指纹：文案没变就不重发，避免 4 次/秒的通知风暴。 */
+    /** 上一次发通知的指纹：文案没变就不重发，避免无谓的通知风暴。 */
     private var lastNoteKey = ""
-    /** 本机是否吃「闹钟置顶」这一套；第一次被拒后置 false，避免每秒重试。 */
-    private var decorateOk = true
+    /** 是否已经确认过「实时动态」的最终态，只需确认一次。 */
+    private var promotedChecked = false
+    private var promotedOk = false
+    /** 装饰能力只记一次日志，避免刷屏。 */
+    private var decorLogged = false
+    /** 实时动态确认无效后，改用闹钟式通知。 */
+    private var forceAlarm = false
 
     private val tickTask = object : Runnable {
         override fun run() {
@@ -58,18 +62,35 @@ class TimerService : Service() {
         }
     }
 
-    /**
-     * 先按「闹钟通知」发；ROM 若不接受（抛异常）就退回普通高优先级通知，
-     * 并把 [alarmOk] 关掉，后续不再试——否则每秒都会抛一次。
-     */
     private fun push(s: TimerEngine.Ui) {
         val nm = getSystemService(NotificationManager::class.java) ?: return
-        val ok = runCatching { nm.notify(NOTI_ID, buildNotification(s, decorateIt = true)) }.isSuccess
-        if (!ok) {
-            decorateOk = false
-            runCatching { nm.notify(NOTI_ID, buildNotification(s, decorateIt = false)) }
+        runCatching { nm.notify(NOTI_ID, buildNotification(s)) }
+        if (!promotedChecked) {
+            // 发出去之后再回读一次：系统到底有没有把这条通知提升为「实时动态」，
+            // 只认 FLAG_PROMOTED_ONGOING，避免「设了属性但系统没认」这种静默失效。
+            promotedChecked = true
+            handler.postDelayed({ verifyPromoted(nm) }, 1500L)
         }
     }
+
+    private fun verifyPromoted(nm: NotificationManager) {
+        if (Build.VERSION.SDK_INT < 36) return
+        val n = runCatching {
+            nm.activeNotifications.firstOrNull { it.id == NOTI_ID }?.notification
+        }.getOrNull() ?: return
+        promotedOk = (n.flags and Notification.FLAG_PROMOTED_ONGOING) != 0
+        Log.i(TAG, "promoted=$promotedOk canPost=${canPromote()} sdk=${Build.VERSION.SDK_INT}")
+        if (!promotedOk && !forceAlarm) {
+            // 提升没生效：下一拍改用闹钟式通知兜底，至少让锁屏/状态栏按闹钟展示。
+            forceAlarm = true
+            lastNoteKey = ""
+        }
+    }
+
+    private fun canPromote(): Boolean = runCatching {
+        Build.VERSION.SDK_INT >= 36 &&
+            getSystemService(NotificationManager::class.java)?.canPostPromotedNotifications() == true
+    }.getOrDefault(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -78,20 +99,23 @@ class TimerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            // 来自通知 / 锁屏的「结束」：连状态一起收干净。
-            // 只 stopSelf 会把 phase 留在 RUNNING，下次打开会被 restore() 当成「还在练」续上。
-            TimerEngine.stop()
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                // 来自通知 / 锁屏的「结束」：连状态一起收干净。
+                // 只 stopSelf 会把 phase 留在 RUNNING，下次打开会被 restore() 当成「还在练」续上。
+                TimerEngine.stop()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE -> TimerEngine.pause()
+            ACTION_RESUME -> TimerEngine.resume()
         }
-        // 启前台服务先用不装饰的版本：闹钟置顶属性留给随后的 notify 补，
-        // 个别 ROM 会拒绝 startForeground 带这类属性。
-        startForeground(NOTI_ID, buildNotification(TimerEngine.ui.value, decorateIt = false))
+        startForeground(NOTI_ID, buildNotification(TimerEngine.ui.value))
         lastNoteKey = ""
         acquireWakeLock()
         if (!alive) {
             alive = true
+            Log.i(TAG, "start sdk=${Build.VERSION.SDK_INT} canPost=${canPromote()}")
             handler.removeCallbacks(tickTask)
             handler.post(tickTask)
         }
@@ -145,7 +169,7 @@ class TimerService : Service() {
             val ch = NotificationChannel(
                 CHANNEL_ALARM,
                 Lang.t("app_title"),
-                NotificationManager.IMPORTANCE_HIGH   // 与系统闹钟同级：锁屏置顶、可展开
+                NotificationManager.IMPORTANCE_HIGH
             )
             ch.setSound(null, null)                   // 到点铃声由 BellPlayer 放，这里保持静音
             ch.enableVibration(false)
@@ -155,74 +179,101 @@ class TimerService : Service() {
         }
     }
 
-    private fun buildNotification(s: TimerEngine.Ui, decorateIt: Boolean): Notification {
+    private fun buildNotification(s: TimerEngine.Ui): Notification {
         val left = if (s.phase == TimerEngine.Phase.PREP) s.prepLeftMs else s.remainingMs
-        val body = Lang.t("notif_body") + TimerEngine.formatTime(left)
         // 只有「准备中 / 冥想中」才让系统走秒；暂停时把时间定格成静态文字
         val ticking = s.phase == TimerEngine.Phase.PREP || s.phase == TimerEngine.Phase.RUNNING
-        val nowWall = System.currentTimeMillis()
+        val countdown = ticking && !s.infinite
+        val now = System.currentTimeMillis()
 
-        val b = NotificationCompat.Builder(this, CHANNEL_ALARM)
+        val b = Notification.Builder(this, CHANNEL_ALARM)
             .setSmallIcon(R.drawable.ic_stat_timer)
             .setContentTitle(Lang.t("app_title"))
-            .setContentText(body)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentText(Lang.t("notif_body") + TimerEngine.formatTime(left))
             .setContentIntent(openIntent())
-            .addAction(0, Lang.t("btn_stop"), stopIntent())
-            .setUsesChronometer(ticking)
-            .setChronometerCountDown(ticking && !s.infinite)
-        if (ticking) {
-            // 有限时长：倒数到「现在 + 剩余」；无限时长：正向累计，不倒数
-            b.setWhen(if (s.infinite) nowWall - left else nowWall + left)
-        } else {
-            b.setWhen(0L)
+            .setOngoing(true)                         // 实时动态的必要条件
+            .setAutoCancel(false)
+            .setLocalOnly(true)
+            .setShowWhen(false)                       // when 只作倒计时基准，不显示成时间戳
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_ALARM) // 锁屏按闹钟类通知展示
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setUsesChronometer(ticking)              // 系统自己走秒，不靠进程重画
+            .setChronometerCountDown(countdown)
+            .setWhen(if (ticking) (if (s.infinite) now - left else now + left) else 0L)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // 前台服务通知默认会被系统压 10 秒才露出；倒计时一开始就看不见等于没有。
+            b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         }
 
-        val plain = b.build()
-        // 暂停态 / 无限计时不需要「闹钟置顶」；本机已确认不支持时也不再折腾
-        val want = ticking && !s.infinite
-        if (!decorateIt || !want || !decorateOk) return plain
-        return decorate(plain, left)
+        // 与系统闹钟一致：计时中给「暂停」，暂停中给「继续」，右侧常驻「结束」
+        if (s.phase == TimerEngine.Phase.PAUSED) {
+            b.addAction(R.drawable.ic_stat_timer, Lang.t("btn_resume"), actionIntent(ACTION_RESUME, REQ_RESUME))
+        } else if (ticking) {
+            b.addAction(R.drawable.ic_stat_timer, Lang.t("btn_pause"), actionIntent(ACTION_PAUSE, REQ_PAUSE))
+        }
+        b.addAction(R.drawable.ic_stat_timer, Lang.t("btn_stop"), actionIntent(ACTION_STOP, REQ_STOP))
+
+        // 锁屏 / 状态栏「被顶上去」的两条路，按可用性逐级尝试：
+        // ① Android 16 实时动态（状态栏胶囊 + 锁屏置顶）；② 老式 alarm clock 通知。
+        // 两者都取不到时就是一条普通常驻通知，计时与铃声完全不受影响。
+        if (ticking || s.phase == TimerEngine.Phase.PAUSED) {
+            val live = if (Build.VERSION.SDK_INT >= 36 && !forceAlarm) applyLiveUpdate(b, left) else false
+            val alarm = if (!live && countdown) applyAlarmClock(b, left) else false
+            if (!decorLogged) {
+                decorLogged = true
+                Log.i(TAG, "decorate live=$live alarm=$alarm sdk=${Build.VERSION.SDK_INT}")
+            }
+        }
+
+        return b.build()
     }
 
     /**
-     * 按系统闹钟的方式把这条通知「顶上去」，锁屏不解锁也能看到倒计时：
-     * - Android 16+：官方实时动态（promoted ongoing）+ 状态栏胶囊，正是新版系统时钟的计时器用法；
-     * - Android 12~15：老版本系统闹钟靠的是 alarm clock 类型通知，锁屏与状态栏会优先展示，
-     *   但 compileSdk 37 的公开 SDK 已删掉 setAlarmClock / AlarmClockInfo，只能按名字反射。
-     * 任一步失败就原样返回普通通知，并记下本机不吃这一套，之后不再重试。
+     * 实时动态（状态栏倒计时胶囊 + 通知栏/锁屏置顶）。
+     * API 36 起进公开 SDK，但**部分 Android 16 出厂版本里仍是 @hide**：
+     * 实测 Redmi Note 15 Pro（SDK 36）直接调用会
+     * `NoSuchMethodError … setRequestPromotedOngoing` 崩掉整个进程。
+     * 因此一律按名字反射取，取不到就当没有，绝不能影响计时。
      */
-    private fun decorate(n: Notification, left: Long): Notification {
-        return try {
-            // 不能用 Builder.rebuild()——那是 @hide，公开 SDK 里只有 build()。
-            val pb = Notification.Builder.recoverBuilder(this, n)
-            if (Build.VERSION.SDK_INT >= 36) {
-                pb.setRequestPromotedOngoing(true)
-                pb.setShortCriticalText(TimerEngine.formatTime(left))
-            } else {
-                attachAlarmClock(pb, left)
-            }
-            pb.build()
-        } catch (_: Throwable) {
-            decorateOk = false
-            n
-        }
-    }
+    private fun applyLiveUpdate(b: Notification.Builder, left: Long): Boolean = runCatching {
+        // 路线一：公开方法（部分 ROM 有）。取不到就换路线二，不能直接调，否则 NoSuchMethodError 崩进程。
+        val byMethod = runCatching {
+            b.javaClass
+                .getMethod("setRequestPromotedOngoing", java.lang.Boolean.TYPE)
+                .invoke(b, true)
+            b.javaClass
+                .getMethod("setShortCriticalText", String::class.java)
+                .invoke(b, TimerEngine.formatTime(left))
+            true
+        }.getOrDefault(false)
+        if (byMethod) return@runCatching true
 
-    /** 反射补一条 `setAlarmClock`：用「现在 + 剩余」作为闹钟时刻，点开即回计时页。 */
-    private fun attachAlarmClock(pb: Notification.Builder, left: Long) {
-        val show = openIntent()
+        // 路线二：官方 extras 通道。两个 key 都是编译期字符串常量，
+        // 不需要运行时存在任何方法，只要系统认这两个 key 就能提升并把剩余时间挂到胶囊上。
+        val ex = Bundle()
+        ex.putBoolean(Notification.EXTRA_REQUEST_PROMOTED_ONGOING, true)
+        ex.putString("android.shortCriticalText", TimerEngine.formatTime(left))
+        b.setExtras(ex)
+        true
+    }.getOrDefault(false)
+
+    /**
+     * 老式 alarm clock 通知：系统闹钟在 Android 12~15 靠它上锁屏、进状态栏。
+     * 实时动态不可用时兜底，同样反射调用（API 36 起该类已从公开 SDK 移除）。
+     */
+    private fun applyAlarmClock(b: Notification.Builder, left: Long): Boolean = runCatching {
         val infoCls = Class.forName("android.app.Notification\$AlarmClockInfo")
+        val show = openIntent()
         val info = infoCls
             .getConstructor(java.lang.Long.TYPE, PendingIntent::class.java)
             .newInstance(System.currentTimeMillis() + left, show)
-        pb.javaClass
+        b.javaClass
             .getMethod("setAlarmClock", infoCls, PendingIntent::class.java)
-            .invoke(pb, info, show)
-    }
+            .invoke(b, info, show)
+        true
+    }.getOrDefault(false)
 
     private fun pendingFlags(): Int =
         PendingIntent.FLAG_UPDATE_CURRENT or
@@ -235,20 +286,27 @@ class TimerService : Service() {
         return PendingIntent.getActivity(this, REQ_OPEN, i, pendingFlags())
     }
 
-    private fun stopIntent(): PendingIntent {
-        val i = Intent(this, TimerService::class.java).setAction(ACTION_STOP)
-        return PendingIntent.getService(this, REQ_STOP, i, pendingFlags())
+    /** 通知上的「暂停 / 继续 / 结束」都走同一条服务指令通道。 */
+    private fun actionIntent(action: String, req: Int): PendingIntent {
+        val i = Intent(this, TimerService::class.java).setAction(action)
+        return PendingIntent.getService(this, req, i, pendingFlags())
     }
 
     companion object {
+        private const val TAG = "ZenTimer"
         /** 旧的低优先级渠道，仅用于升级时清理内测版残留。 */
         private const val CHANNEL = "timer_player"
-        private const val CHANNEL_ALARM = "timer_alarm"
+        /** 计时通知渠道；设置页要用它读渠道是否被用户关掉。 */
+        const val CHANNEL_ALARM = "timer_alarm"
         private const val NOTI_ID = 1001
         private const val TICK_MS = 250L
         private const val REQ_OPEN = 1
         private const val REQ_STOP = 2
+        private const val REQ_PAUSE = 3
+        private const val REQ_RESUME = 4
         const val ACTION_STOP = "com.yaohui.zentimer.STOP"
+        const val ACTION_PAUSE = "com.yaohui.zentimer.PAUSE"
+        const val ACTION_RESUME = "com.yaohui.zentimer.RESUME"
 
         fun start(ctx: Context) {
             val i = Intent(ctx, TimerService::class.java)
