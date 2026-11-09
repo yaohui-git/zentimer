@@ -5,15 +5,16 @@
 > ## 09:25 稳定版发布到 GitHub（叠加在下方全部记录之上，**发布状态以本条为准**）
 >
 > 用户逐字：「**可以了，作为一个稳定版本发布到github吧。用一周左右，看看有没有需要修补的，再考虑广普**」。
-> **v2.17 定为本轮稳定版**：发布到 <https://github.com/yaohui-git/zentimer> 的 `main` 分支并打 `v2.17` tag，`releases/静息计时-v2.17.apk` 随仓库提供（sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`，证书 `64047d93…`，可覆盖升级）。
+> **v2.17 定为本轮稳定版**：发布到 <https://github.com/yaohui-git/zentimer> 的 `main` 分支并打 `v2.17` tag，`releases/zentimer-v2.17.apk` 随仓库提供（sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`，证书 `64047d93…`，可覆盖升级）。
 > 同步面：公开 `README.md` 的安装入口改指 v2.17、真机验收段补上四个显示表面的 v2.17 结论并标注 v2.3 旧段为历史；`STORE-LISTING.md` 版本字段同步为 2.17，但**明确保持「未实际提交」的草稿状态**。
 > **观察期约一周**：只收集 GitHub Issues 反馈、按需修补；不做商店上架或其它推广动作，是否广泛推广等观察期结束后再定。
 > 发布链路（SSH Deploy key、现成工作区 `zentimer/.craft/tmp_remote`、`tools/make_oss_repo.py` 白名单）已补进工作区根 `本地工具清单.md` 第三节与第五节第 10 条，避免下次重新摸认证。
+> **命名口径（10:05 补）**：用户逐字：「发布到github上，中文文件名不支持，换成zentimer才可以」。GitHub 仓库 `releases/` 内 APK 一律 `zentimer-vX.X.apk`；目录只留一个与代码同步的最新包，历史包改由 Release 附件提供。下方历史记录里的中文文件名是当时本地命名，原文保留。
 
 > ## 09:00 最终定稿（叠加在下方全部记录之上，**以本条为准**）
 >
 > 用户逐字：「算了，如果这一轮还搞不定，就不折腾了。基于目前模型的能力，做到就行，不求美观了。发布一版吧」「**"冥想中"这三个字仅限充电锁屏界面哈。顶栏和通知栏下拉都必须有倒计时**」「（充电锁屏）显示充电进度和USB连接的那个锁屏界面，这个界面。和系统闹钟一样，只显示时钟LOGO+静坐中」。
-> **最终发布版：`releases/静息计时-v2.17.apk`，v2.17 / versionCode 18，sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`。**
+> **最终发布版：`releases/zentimer-v2.17.apk`，v2.17 / versionCode 18，sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`。**
 > 四个显示表面的最终语义（用户给的名词，不要混）：
 >
 > | 显示表面 | 定稿内容 | 真机像素证据 |
@@ -41,7 +42,7 @@
 
 ## v2.17（versionCode 18，2026-11-09 08:37，**最终发布版**）
 
-`releases/静息计时-v2.17.apk`，sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`，`build-v217.log` 为 `BUILD SUCCESSFUL`。**只改通知字段与屏幕状态联动，计时 / 结算 / 响铃 / 档位 / 完成态文案一行未动。**
+`releases/zentimer-v2.17.apk`，sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`，`build-v217.log` 为 `BUILD SUCCESSFUL`。**只改通知字段与屏幕状态联动，计时 / 结算 / 响铃 / 档位 / 完成态文案一行未动。**
 
 用户 08:31 逐字点名的 BUG：「（充电锁屏）显示充电进度和USB连接的那个锁屏界面，这个界面。和系统闹钟一样，只显示时钟LOGO+静坐中」。v2.16 那屏的 AOD 胶囊实际显示 `时钟 LOGO + 2:42` / `2:13`（`out/v216/aod_15s.png` / `aod_42s.png`），是倒计时数字，不符合。
 

@@ -40,7 +40,7 @@ gradle assembleDebug
 
 - **唯一来源**是 `ZenTimer/app/build.gradle.kts` 的 `versionCode` / `versionName`。界面通过 `BuildConfig` 读取，**不要**再到 Kotlin 里手写一份版本常量。
 - **每次出包都要 +1 `versionCode`**，哪怕只改一行；`versionName` 按「主.次」递增。理由很实际：商店上传要求 `versionCode` 单调递增，同号会被判重复包；版本号不变，出问题时也无法判断测试机装的是哪一份。
-- 产物文件名带上版本号（`静息计时-v2.4.apk`），**已发布的文件名不再覆盖**，历史包留在 `releases/` 里。
+- 产物文件名带上版本号，**GitHub 仓库内一律 `zentimer-vX.X.apk`（纯 ASCII；中文文件名在 GitHub 上不可用）**；仓库 `releases/` 只留一个与代码同步的最新包，历史版本改由 GitHub Release 附件提供，不留在目录里。
 
 ## 报告问题
 

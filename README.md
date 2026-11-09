@@ -73,10 +73,10 @@
 
 > **当前稳定版：v2.17（versionCode 18，2026-11-09）**。本版先在仓库里放约一周观察，收集 Issue 反馈、按需修补，之后才考虑更广泛地推广；商店上架等推广动作**本轮不做**。四个显示表面的验收结论见下方「真机验收」与 [`CHANGELOG.md`](CHANGELOG.md)。遇到问题请走 GitHub Issues。
 
-直接装 [`releases/静息计时-v2.17.apk`](releases/静息计时-v2.17.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
+直接装 [`releases/zentimer-v2.17.apk`](releases/zentimer-v2.17.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
 
 ```bash
-adb install -r releases/静息计时-v2.17.apk
+adb install -r releases/zentimer-v2.17.apk
 ```
 
 签名证书 SHA-256：`64047d9373cf2e7b942bf171e180c5b65c5e2601c68e9260c2b4aef55cc480d9`（`zentimer.jks`，主体 `CN=zentimer`，RSA 2048 / 有效期约 27 年）。
@@ -139,7 +139,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 如果它对你有用，想支持一下：
 
-> **加微信 `pingyishufang`（耀慧）**，金额随意、完全自愿。
+> **加微信 `pingyishufang`（平人）**，金额随意、完全自愿。
 
 应用「关于」页里点一下「打赏作者」会自动复制微信号并唤起微信；你也可以在微信里直接搜索这个号。**本应用不展示收款码、不内嵌支付、不接任何支付 SDK、不处理金额 / 订单 / 付款结果**，付款全程发生在微信里。
 
