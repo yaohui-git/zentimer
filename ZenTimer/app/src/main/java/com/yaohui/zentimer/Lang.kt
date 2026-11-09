@@ -1,6 +1,8 @@
 package com.yaohui.zentimer
 
 import android.content.Context
+import android.content.res.Resources
+import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,23 +34,41 @@ object Lang {
 
     const val KEY_LANG = "lang"
     private const val KEY_LANG_MANUAL = "lang_manual"
+    /** 存储格式版本：v2.10 起语言判定改为多来源，旧版留下的键需要一次性校正。 */
+    private const val KEY_LANG_VER = "lang_ver"
+    private const val LANG_VER = 1
 
     fun init(ctx: Context) {
         val prefs = ctx.prefs()
         val saved = prefs.getString(KEY_LANG, null)
         val manual = prefs.getBoolean(KEY_LANG_MANUAL, false)
-        _mode.value = if (manual && saved != null) {
+        val ver = prefs.getInt(KEY_LANG_VER, 0)
+        val sys = defaultFromSystem(ctx)
+
+        // v2.9 及以前有个自锁缺陷：一旦某次把中文系统判成 en 并盖上「手动」戳，
+        // 之后每次启动都照抄这个 en，永远不会再跟随系统 —— 系统中文、界面英文就是这么来的。
+        // 只在「存的是 en、系统其实是中文、且是本版之前写下的」这一种矛盾上翻案；
+        // 用户自己选的简/繁一律不动，避免把繁体用户误翻成简体。
+        val stale = ver < LANG_VER && manual && saved == "en" && sys != Mode.EN
+
+        _mode.value = when {
+            stale -> sys
             // 用户手动选过：以选择为准，系统语言变了也不覆盖
-            when (saved) {
+            manual && saved != null -> when (saved) {
                 "hans", "zh" -> Mode.HANS
                 "hant" -> Mode.HANT
                 "en" -> Mode.EN
-                else -> defaultFromSystem(ctx)
+                else -> sys
             }
-        } else {
             // 没手动选过：每次启动都按当前系统语言重算，真正做到「默认跟随系统」
-            defaultFromSystem(ctx).also { prefs.edit().putString(KEY_LANG, it.code).apply() }
+            else -> sys
         }
+
+        val e = prefs.edit()
+            .putString(KEY_LANG, _mode.value.code)
+            .putInt(KEY_LANG_VER, LANG_VER)
+        if (stale) e.putBoolean(KEY_LANG_MANUAL, false)
+        e.apply()
     }
 
     /**
@@ -56,10 +76,27 @@ object Lang {
      * 其余所有语言（English、日语、法语、韩语……）一律 EN，让国际友人开箱即用。
      */
     private fun defaultFromSystem(ctx: Context): Mode {
-        // 用 App 自己的 resources 配置，而不是 Resources.getSystem()：
-        // 后者的 locale 在部分 ROM / 冷启动早期并不可靠，会出现中文系统被判成英文。
-        val locales = ctx.resources.configuration.locales
-        val l = if (locales.isEmpty) Locale.getDefault() else locales[0]
+        // ① Android 13+ 的「应用级语言」（系统设置里单独给本应用指定的语言）是明确选择，最高优先。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val app = runCatching {
+                ctx.getSystemService(android.app.LocaleManager::class.java)?.applicationLocales
+            }.getOrNull()
+            if (app != null && !app.isEmpty) return modeOf(app[0])
+        }
+
+        // ② 否则看系统语言。这里要三个来源一起看：只看 app 自己的 configuration 不够——
+        //   部分 ROM 在应用没有对应语言资源时会把自己的配置回落到 en（实测 Android 12 的 MIUI 有这毛病），
+        //   而 getSystem() 与 Locale.getDefault() 才是系统真值。任一来源说是中文，就按中文。
+        val candidates = listOfNotNull(
+            ctx.resources.configuration.locales.let { if (it.isEmpty) null else it[0] },
+            Resources.getSystem().configuration.locales.let { if (it.isEmpty) null else it[0] },
+            Locale.getDefault()
+        )
+        val zh = candidates.firstOrNull { it.language == "zh" }
+        return modeOf(zh ?: candidates.first())
+    }
+
+    private fun modeOf(l: Locale): Mode {
         if (l.language != "zh") return Mode.EN
         val tag = l.toLanguageTag().lowercase(Locale.ROOT)
         val script = l.script.lowercase(Locale.ROOT)
@@ -75,6 +112,7 @@ object Lang {
         ctx.prefs().edit()
             .putString(KEY_LANG, m.code)
             .putBoolean(KEY_LANG_MANUAL, true)
+            .putInt(KEY_LANG_VER, LANG_VER)
             .apply()
     }
 
@@ -85,6 +123,7 @@ object Lang {
         ctx.prefs().edit()
             .putBoolean(KEY_LANG_MANUAL, false)
             .putString(KEY_LANG, m.code)
+            .putInt(KEY_LANG_VER, LANG_VER)
             .apply()
     }
 
@@ -194,13 +233,15 @@ object Lang {
         "app_title" to "静息",
         "state_idle" to "准备好了，随时开始",
         "state_prep" to "准备中",
-        "state_running" to "冥想中",
+        // 08:18 用户裁决：状态词统一「静坐中」，充电锁屏（AOD）与卡片正文都不给数字。
+        "state_running" to "静坐中",
         "state_paused" to "已暂停",
         "state_done" to "本次练习完成",
         "state_stopped" to "已结束本次练习",
         "hint_tap_ring" to "轻触圆环开始",
         "hint_tap_again" to "轻触圆环可再来一次",
         "btn_start" to "开始冥想",
+        "btn_again" to "再来一次",
         "btn_pause" to "暂停",
         "btn_resume" to "继续",
         "btn_stop" to "结束",
@@ -220,7 +261,7 @@ object Lang {
         "picker_ambience" to "选择背景音",
         "infinite" to "无限",
         "state_infinite" to "无时限 · 自由冥想",
-        "catchup" to "本次练习已在后台结束，铃声补响",
+        "catchup" to "本次练习已在后台结束，未补响铃",
         // 菜单与三个子页
         "menu_presets" to "预设",
         "menu_settings" to "设置",
@@ -278,13 +319,14 @@ object Lang {
         "app_title" to "靜息",
         "state_idle" to "準備好了，隨時開始",
         "state_prep" to "準備中",
-        "state_running" to "冥想中",
+        "state_running" to "靜坐中",
         "state_paused" to "已暫停",
         "state_done" to "本次練習完成",
         "state_stopped" to "已結束本次練習",
         "hint_tap_ring" to "輕觸圓環開始",
         "hint_tap_again" to "輕觸圓環可再來一次",
         "btn_start" to "開始冥想",
+        "btn_again" to "再來一次",
         "btn_pause" to "暫停",
         "btn_resume" to "繼續",
         "btn_stop" to "結束",
@@ -304,7 +346,7 @@ object Lang {
         "picker_ambience" to "選擇背景音",
         "infinite" to "無限",
         "state_infinite" to "無時限 · 自由冥想",
-        "catchup" to "本次練習已在背景結束，鈴聲補響",
+        "catchup" to "本次練習已在背景結束，未補響鈴",
         "menu_presets" to "預設",
         "menu_settings" to "設定",
         "menu_about" to "關於",
@@ -357,13 +399,14 @@ object Lang {
         "app_title" to "zentimer",
         "state_idle" to "Ready when you are",
         "state_prep" to "Get ready",
-        "state_running" to "Meditating",
+        "state_running" to "Sitting",
         "state_paused" to "Paused",
         "state_done" to "Session complete",
         "state_stopped" to "Session ended",
         "hint_tap_ring" to "Tap the ring to begin",
         "hint_tap_again" to "Tap the ring to go again",
         "btn_start" to "Start",
+        "btn_again" to "Go again",
         "btn_pause" to "Pause",
         "btn_resume" to "Resume",
         "btn_stop" to "End",
@@ -383,7 +426,7 @@ object Lang {
         "picker_ambience" to "Ambient sound",
         "infinite" to "Endless",
         "state_infinite" to "Open-ended · free meditation",
-        "catchup" to "Session ended in the background · bell replayed",
+        "catchup" to "Session ended in the background · no bell replay",
         "menu_presets" to "Presets",
         "menu_settings" to "Settings",
         "menu_about" to "About",

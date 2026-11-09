@@ -28,9 +28,18 @@ object BellPlayer {
     private var pending: Runnable? = null
     private var generation = 0L
     private var lastStartAt = 0L        // 上一声起响时刻（uptimeMillis）
+    /** 进程内的第二道保险：同一轮练习的结束铃只播一次。真正的凭据在磁盘（TimerEngine）。 */
+    private var lastOnceToken: String? = null
 
     /** 上一声彻底播完之后，再静置多久才起下一声。 */
     private const val TAIL_GAP_MS = 1800L
+
+    /** 带一次性令牌的播放；token 为空或重复时直接忽略。 */
+    fun playOnce(token: String, context: Context, resId: Int, volume: Float, times: Int = 1) {
+        if (token.isEmpty() || token == lastOnceToken) return
+        lastOnceToken = token
+        play(context, resId, volume, times)
+    }
 
     fun play(context: Context, resId: Int, volume: Float, times: Int = 1) {
         if (resId == 0) return

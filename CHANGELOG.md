@@ -2,6 +2,171 @@
 
 > **协议与仓库地址**：v2.3 发布起采用 **Apache-2.0**（`LICENSE` 标准全文 + `NOTICE.md` 素材例外），仓库 <https://github.com/yaohui-git/zentimer>。下方早期记录中提到 MIT、开源地址「待定」处均为当时状态，**以当前 `LICENSE` / `NOTICE.md` / `AppInfo.kt` 为准**。
 
+> ## 09:25 稳定版发布到 GitHub（叠加在下方全部记录之上，**发布状态以本条为准**）
+>
+> 用户逐字：「**可以了，作为一个稳定版本发布到github吧。用一周左右，看看有没有需要修补的，再考虑广普**」。
+> **v2.17 定为本轮稳定版**：发布到 <https://github.com/yaohui-git/zentimer> 的 `main` 分支并打 `v2.17` tag，`releases/静息计时-v2.17.apk` 随仓库提供（sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`，证书 `64047d93…`，可覆盖升级）。
+> 同步面：公开 `README.md` 的安装入口改指 v2.17、真机验收段补上四个显示表面的 v2.17 结论并标注 v2.3 旧段为历史；`STORE-LISTING.md` 版本字段同步为 2.17，但**明确保持「未实际提交」的草稿状态**。
+> **观察期约一周**：只收集 GitHub Issues 反馈、按需修补；不做商店上架或其它推广动作，是否广泛推广等观察期结束后再定。
+> 发布链路（SSH Deploy key、现成工作区 `zentimer/.craft/tmp_remote`、`tools/make_oss_repo.py` 白名单）已补进工作区根 `本地工具清单.md` 第三节与第五节第 10 条，避免下次重新摸认证。
+
+> ## 09:00 最终定稿（叠加在下方全部记录之上，**以本条为准**）
+>
+> 用户逐字：「算了，如果这一轮还搞不定，就不折腾了。基于目前模型的能力，做到就行，不求美观了。发布一版吧」「**"冥想中"这三个字仅限充电锁屏界面哈。顶栏和通知栏下拉都必须有倒计时**」「（充电锁屏）显示充电进度和USB连接的那个锁屏界面，这个界面。和系统闹钟一样，只显示时钟LOGO+静坐中」。
+> **最终发布版：`releases/静息计时-v2.17.apk`，v2.17 / versionCode 18，sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`。**
+> 四个显示表面的最终语义（用户给的名词，不要混）：
+>
+> | 显示表面 | 定稿内容 | 真机像素证据 |
+> |---|---|---|
+> | **顶栏**（桌面状态栏中央黑色胶囊） | 时钟 LOGO + **实时倒计时数字**，每秒刷新 | `out/v217/v217_home.png` = `2:54` |
+> | **通知栏下拉**（白色卡片） | **只一组**系统走秒数字 `02:48` + 中间一行「静坐中」+ 横向「暂停 结束」 | `out/v217/v217_shade.png` |
+> | **类通知栏下拉锁屏**（亮屏锁屏卡片） | 同下拉：`02:43` +「静坐中」+「暂停 结束」 | `out/v217/v217_lock.png` |
+> | **充电锁屏**（息屏 AOD，显示充电百分比与 USB 充电的那屏） | **时钟 LOGO +「静坐中」，不给任何数字**，与系统闹钟同款 | `out/v217/aod_final_12s.png` |
+>
+> 状态词从「冥想中」统一改为**「静坐中」**，并且「静坐中」不再只限充电锁屏：用户后续要求下拉与亮屏锁屏的中间一行也是这三个字。下方 08:15 定稿条、v2.15 一节、`FeatureMap` 与 `证据核查` E19 里「v2.15 是最终发布版」「AOD 是『冥想中』」「下拉两组数字可接受」等说法**原文一律保留不删，但全部以本条为准**；v2.15 / v2.16 都是中间候选包，不拿去安装。详见 `证据核查-2026-11-08.md` E20 / E21。
+
+> ## 08:15 定稿（叠加在下方全部记录之上，**已被上方 09:00 条取代，原文保留作过程**）
+>
+> 用户逐字：「算了，如果这一轮还搞不定，就不折腾了。基于目前模型的能力，做到就行，不求美观了。发布一版吧」「"冥想中"这三个字仅限充电锁屏界面哈。顶栏和通知栏下拉都必须有倒计时」。
+> **最终发布版：`releases/静息计时-v2.15.apk`，v2.15 / versionCode 16，sha256 `f6d273733937e67ac72ee61a1be089d64d716f22bf7d2be553793b45fe1faa19`。**
+> 三个显示表面的最终语义：充电锁屏 AOD 只给 `aodTitle="冥想中"`、不给数字；顶栏胶囊显示倒计时 `0:50`；下拉与锁屏卡片显示系统走秒 `00:38` + 标题数字 `0:40`。「冥想中」不再出现在顶栏与下拉。
+> 下方 07:45 修正标注里「v2.13 仍是当前发布包」这句**已被本条取代**；v2.14 是中间候选包，不作发布版。详见 `证据核查-2026-11-08.md` E19。
+
+> ## 07:45 修正标注（叠加在 v2.12 / v2.13 之上，**以本条为准**）
+>
+> 同机对照截图 `.craft/demo2/out/cmp2_home.png` 直接可见：**静息 v2.13 计时中的黑色胶囊显示的是时钟图标 +「冥想中」，不是走秒数字**；`00:48` 这类走秒数字出现在下拉卡片的应用名旁边。
+> 已验的只有三条：`android.shortCriticalText` 字段确实不在、`PROMOTED_ONGOING` 确实生效、胶囊确实出现。**「不设 shortCriticalText ⇒ 数字能进胶囊」这句预期被截图证伪，此前当作结论写过，属于措辞过强，现作废。**
+> 下方 v2.12 第 1 条末句「会把系统走秒数字从胶囊里挤掉」、v2.13 末段「§5.6 的裁决成立」，以及 `证据核查` E16 / E17、`FeatureMap` §5.6 / §7 第 2 问里同类句子 **原文保留不删，但不再作为「胶囊显示什么」的依据**；「计时中一律不设 `shortCriticalText`」这条**代码裁决本身不变**，变的只是对它的效果描述。
+> 为什么胶囊显示状态词，**原因未证实**（可能是 `focusType=PARAMS` 私有通道覆盖官方 chip 文案，也可能是缺 `shortCriticalText` 时 SystemUI 回落到 `contentTitle`），不猜、不冒充已达成。详见 `证据核查-2026-11-08.md` E18、`豆包Demo评估-2026-11-09.md` §6。**产品代码本轮未改，v2.13 仍是当前发布包。**
+
+## v2.17（versionCode 18，2026-11-09 08:37，**最终发布版**）
+
+`releases/静息计时-v2.17.apk`，sha256 `aafc3d8dbf706b217cf00f4298b063be288fffee1dd11794f129750cf8f3f185`，`build-v217.log` 为 `BUILD SUCCESSFUL`。**只改通知字段与屏幕状态联动，计时 / 结算 / 响铃 / 档位 / 完成态文案一行未动。**
+
+用户 08:31 逐字点名的 BUG：「（充电锁屏）显示充电进度和USB连接的那个锁屏界面，这个界面。和系统闹钟一样，只显示时钟LOGO+静坐中」。v2.16 那屏的 AOD 胶囊实际显示 `时钟 LOGO + 2:42` / `2:13`（`out/v216/aod_15s.png` / `aod_42s.png`），是倒计时数字，不符合。
+
+1. **定位**：这台 HyperOS 的**顶栏胶囊与 AOD 胶囊共用同一个 `android.shortCriticalText`**。v2.16 为了让顶栏实时走秒而写了这个字段，亮屏达标，息屏时同一个字段被 AOD 胶囊读取，就把数字带到了充电锁屏。系统闹钟不写该字段，所以它的 AOD 回落 `param_v2.aodTitle`，只显示 LOGO + 状态词（E11 截图 / E12 反汇编）。这是「同一字段、两个表面」的冲突，不是两个独立通知。
+2. **修法**：`TimerService` 注册 `ACTION_SCREEN_ON` / `ACTION_SCREEN_OFF` 广播维护 `screenOn`，收到切换即清 `lastNoteKey` 让下一拍（250ms）立刻重发。亮屏 → `NotificationContract.applyFocusLayer()` 写 `shortCriticalText = TimerEngine.formatTime(left)`（每秒重发，顶栏实时）；息屏 → **不写这个字段**，AOD 胶囊回落 `aodTitle="静坐中"`。`push()` / `startForeground()` 都把 `screenOn` 传进 `build()`；`probePromotable()` 的自检对象同步带 `focusOn` / `screenOn`，延续 E17「自检对象必须和正式发布对象完全一致」的教训，避免再造一次自证循环。
+3. **成本边界**：每秒重发只在 `FocusCapability.available() && screenOn && 计时中 && 非无限` 时启用；其它 ROM、息屏、暂停 / 完成态一律零重发，保持「一秒都不重建」。`SCREEN_ON/OFF` 是系统广播，`onDestroy()` 里 `unregisterReceiver()`。
+
+**真机验收（NotePro15，两轮）**：
+
+- `.craft/testcases/tc_v217.py`：**13 PASS / 0 FAIL**，字段层。亮屏 `title='静坐中'`、`chip='2:59'`，3 秒后 `2:56`（证明顶栏实时）；息屏 `has_chip_field=False`、`aodTitle:"静坐中"`、`title` 不变；亮屏恢复 `chip='2:22'`。`PROMOTED_ONGOING` 与两条 chronometer 字段全程在。
+- `.craft/testcases/tc_v217_aod.py`：**14 PASS / 0 FAIL**，AOD 专项。**先截图、后取字段**（顺序反了会把 AOD 打灭，这是上一轮全黑的原因），同轮证明设备 `mWakefulness=Dozing`、计时通知仍在、chip 字段已去掉、AOD 文案无数字。
+
+**四表面像素判读**（人眼看图，脚本不冒充 OCR）：
+
+| 表面 | 截图 | 逐字判读 | 达标 |
+|---|---|---|---|
+| 顶栏 | `out/v217/v217_home.png` | 黑色胶囊 = 时钟图标 + `2:54` | ✅ |
+| 通知栏下拉 | `out/v217/v217_shade.png` | `静息 • 02:48`（唯一一组数字）+ 中间行「静坐中」+ 横向「暂停 结束」；无「冥想中」、无第二组数字 | ✅ |
+| 类通知栏下拉锁屏 | `out/v217/v217_lock.png` | `静息 • 02:43` +「静坐中」+「暂停 结束」 | ✅ |
+| 充电锁屏 AOD | `out/v217/aod_final_12s.png` | 黑色胶囊 = **时钟图标 +「静坐中」**，无任何倒计时数字；画面上的 `08:56` / `94%` 是系统 AOD 自带的时钟与充电进度 | ✅ |
+
+**修前 / 修后 A/B 对照**：v2.16 `out/v216/aod_42s.png` = 时钟图标 + `2:13` → v2.17 `out/v217/aod_final_12s.png` = 时钟图标 +「静坐中」。同一台机器、同一个 3 分钟计时、同一位置，只有胶囊文案变了。
+
+**上一轮「AOD 全黑」的更正，如实写**：`tc_v217.py` 的 `v217_aod.png` 全黑，是脚本先跑 `dumpsys notification --noredact` 再 `screencap`，大开销命令把 AOD 从浅睡打进深睡。随后手工重拍的 `aod_clean_18s.png` 其实**拍到了「时钟 LOGO + 静坐中」**，但那一轮被误判成「没启动计时、不能当证据」——真相是计时正跑着（08:44 起 3 分钟，08:46:50 拍的还在计时内），所以界面上已经没有「3 分钟 / 开始冥想」按钮，脚本才打出 `MISS`。`aod_clean_30s/45s.png` 全黑是这台设备 AOD 约 15 秒后熄灭，属设备行为，不是 App 撤了通知。本轮用 `tc_v217_aod.py` 把截图和字段绑在同一轮，才算闭环。
+
+**未验边界不变**：所有像素结论只覆盖这一台 HyperOS / Android 16 的 NotePro15；非小米 Android 16 的 L1 观感、Android 8~15 的 L0 观感仍缺设备，本机无 emulator / AVD / 系统镜像，不冒充全机型通过。AOD 只在息屏后约 10~13 秒能稳定截到，其它 ROM 的 AOD 行为未验。单行横向卡片（系统闹钟私有模板）按用户「做不到，现在的也及格」授权仍不做。
+
+## v2.16（versionCode 17，2026-11-09 08:26，**中间候选包，不发布**）
+
+`releases/静息计时-v2.16.apk`，sha256 `05448788fe4336da03f6729cec15342525d98794cbad8b00749d10a4e79420df`。修用户 08:18 点名的三个 BUG：下拉**两组数字**（`00:38` 与 `0:40`）、两组描述不同 / 不同行字体不同、中间一行显示「冥想中」而非数字或状态词；顶栏倒计时必须实时，不能 10 秒一跳。
+
+1. `contentTitle` 从 `formatTime(left)` **改回状态词**，三语言统一为「静坐中 / 靜坐中 / Sitting」，移除 `notify_ticking`（`tools/check_lang.py`：**110 / 110 / 110，零差异**）。下拉 / 亮屏锁屏因此只剩系统 chronometer 一组数字，不再有两组。
+2. 顶栏数字改用 `android.shortCriticalText` **单独喂**：`NotificationContract.applyFocusLayer()` 只在 L2 能力自检通过时写，`TimerService` 指纹桶从 `left / 10_000L` 改成 `left / 1_000L`，**每秒**重发喂新数字。这推翻了 v2.12 起的「计时中一律不设 shortCriticalText」跨厂商裁决，因此加了两道限制：只在 `FocusCapability.available()` 的机器上、只在 L2 分支，`StyleSelector.pick(caps)` 这个纯函数仍输出 `setShortCriticalText = false`，160 组不变量与「决策输入零厂商名」不变（24 PASS / 21 PASS 重跑仍全绿）。
+3. `param_v2.aodTitle` 从「冥想中」改成「静坐中」，补 `aodPic` / `picFunction` / `hourglass_big` 时钟资源字段。
+
+`.craft/testcases/tc_v216.py` **11 PASS / 0 FAIL**：`android.title=静坐中` 且正文无数字、`android.shortCriticalText` `0:57 → 0:54`（3 秒内实时）、`aodTitle="静坐中"`、`PROMOTED_ONGOING` 与基础 chronometer 仍在。`out/v216/v216_home.png` = 胶囊 `0:52`；`v216_shade.png` = `静息 • 00:46` +「静坐中」+ 横向「暂停 结束」，**只有一组数字**；`v216_lock.png` 同款。**但 `out/v216/aod_15s.png` / `aod_42s.png` 的 AOD 胶囊显示 `2:42` / `2:13`**，被用户 08:31 点名，修在 v2.17。
+
+## v2.15（versionCode 16，2026-11-09 08:12，**中间候选包，不发布；原「本轮最终发布版」已被 09:00 定稿取代，原文保留**）
+
+只改显示文案，计时 / 结算 / 响铃 / 档位一行未动。解决 07:54 用户裁决「顶栏和通知栏下拉都必须有倒计时，『冥想中』仅限充电锁屏」。
+
+1. **v2.14 定位到真因**：把 `contentTitle` 从「冥想中」改成「倒计时中」，真机胶囊文字同步从「冥想中」变成「倒计时中」——**这台 HyperOS 的胶囊文案取的是 `contentTitle`**，不是 chronometer，也不是私有 `sameWidthDigitInfo`（E12 里那套数字字段对第三方不渲染）。E18 里「原因未证实」的第二个假设由此坐实一半：缺 `shortCriticalText` 时 SystemUI 回落到 `contentTitle`。
+2. **v2.15 据此改两处**：`NotificationContract.buildBase()` 在倒计时中把标题写成 `TimerEngine.formatTime(left)`（如 `0:50`）；`TimerService` 的指纹 key 加一个 `left / 10_000L` 桶，**只在 `FocusCapability.available()` 的机器上**每 10 秒重发一次把新数字喂给胶囊。其它 ROM 仍由系统 chronometer 驱动官方 chip，保持「一秒都不重发」。
+3. **AOD 不动**：`param_v2.aodTitle` 仍是「冥想中」，充电锁屏不给数字，逐字对上用户要求。
+4. L2 私有 JSON 按 E12 一手产物修正层级：把误放顶层的 `param_island` 移进 `param_v2`，补 `timerWhen / timerSystemCurrent / timerTotal`、`sameWidthDigitInfo.timerInfo`、`smallIslandArea`。**这几字段对本机胶囊没起作用**，仍保留作可选增益（只追加、不替代，系统忽略时通知仍合法）。
+5. 三语新增 `notify_ticking`（倒计时中 / 倒數計時中 / Countdown），`tools/check_lang.py` 对账 **111 / 111 / 111，零差异**。
+
+**真机验收（NotePro15，`.craft/testcases/tc_v215.py`，8 PASS / 0 FAIL）**：装机 `versionCode=16`；`android.title` 从 `1:00` → `0:50`（12 秒间隔，证明重发真发生）；`PROMOTED_ONGOING` 仍在、`android.shortCriticalText` 仍不设、两条 chronometer 字段仍在、`aodTitle:"冥想中"` 仍在。三张截图 `.craft/testcases/out/v215/`：桌面黑色胶囊 = 时钟图标 + **`0:50`**；下拉 = `静息 • 00:38` + `0:40` + 横向「暂停 结束」，**没有「冥想中」**；锁屏卡片同样有数字。
+
+**已知观感瑕疵，如实写**：下拉第一行是系统 chronometer 每秒走的数字（`00:38`），正文是 10 秒一跳的标题数字（`0:40`），两者最多差 10 秒。要消掉得改成每秒重建通知（豆包 demo 的做法，已在 `豆包Demo评估-2026-11-09.md` 判定为不抄：费电、依赖进程），或改成用 `shortCriticalText` 单独喂胶囊（会推翻跨厂商「计时中不设」的裁决）。用户 07:53 明确「不求美观了」，本轮按此收口，不为观感再动内核。
+
+**按钮横向布局（用户 07:58 澄清后裁决）**：要的是系统闹钟那种「沙漏 + 大数字 + 小标签 + 右侧两个圆钮」全在同一行。当前主界面 `ActionRow` 与通知里的「暂停 / 结束」本来就是左右并排，但卡片整体仍是三行。单行版式由 SystemUI 按 `miui.focus.action_1/2` 私有模板渲染（E12 结论 4，系统闹钟 `actions=1` 却有两个圆钮），第三方改不了标准模板里 action 的位置；上 `RemoteViews` 会丢 promoted 胶囊（E1 官方硬禁）且在 HyperOS 被折叠进「更多通知」（豆包第二版实测）。用户原话「做不到，现在的也及格」，**本轮不做，不算未完成项**。
+
+**未验边界不变**：非小米 Android 16 的 L1 观感、非小米 Android 8~15 的 L0 观感（H1/H2）仍缺设备；本机无 emulator / AVD / 系统镜像，不冒充全机型通过。`SystemUI` 是否为第三方渲染 `miui.focus.param` 仍未证实。
+
+## v2.14（versionCode 15，2026-11-09 08:02，**中间候选包，不作发布版**）
+
+`releases/静息计时-v2.14.apk`，sha `3da26893…`。做了 L2 JSON 层级修正 + 三语 `notify_ticking` + 标题改「倒计时中」。真机 `.craft/testcases/tc_v214.py` **10 PASS / 0 FAIL**（字段全对），但截图 `out/v214/v214_home.png` 里胶囊显示的是「倒计时中」而不是数字 —— **功能目标未达成**。这次失败反而提供了关键对照，定位到胶囊取 `contentTitle`，修在 v2.15。包保留作证据，不要拿去安装。
+
+## v2.12（versionCode 13，2026-11-09，通知三段拆分 + 唯一结算入口）
+
+**这一版改的是 v2.11 第 24 行点名「本版未改响铃逻辑」的那件事**，以及 11-09 03:52 用户硬约束「最后的APP是要兼容各种安卓手机类型的。可不能仅仅只能在小米指定机型使用哈」。两条一起落地，不再分开打补丁。
+
+1. **通知拆成三段，做成不用真机就能验的决策表。**
+   新增 `StyleSelector.pick(caps)`（纯 Kotlin、零 android import）：输入只有「系统版本 / 是否允许实时动态 / 当前通知是否可提升 / 焦点能力自检 / 通知开关 / 上次是否被拒」，**没有厂商名、没有机型名、没有白名单**。输出 BASE / OFFICIAL_CHIP / HYPEROS_FOCUS 三层之一。
+   新增 `NotificationContract`：第 1 段 `buildBase()` 给**所有安卓手机**完整标准通知（标题、系统 chronometer 走秒、`CATEGORY_ALARM` 锁屏可见、暂停/继续/结束 actions）；第 2 段按决策请求 Android 16 官方胶囊，反射调用 `setRequestPromotedOngoing`、失败退回 extras 常量；第 3 段只在运行时 `canShowFocus` 自检通过时**额外追加** `miui.focus.param` 一个字符串，前两段一个字段都不少。
+   **跨厂商统一裁决：计时中一律不设 `shortCriticalText`**，否则它优先级最高，会把系统走秒数字从胶囊里挤掉。暂停态的定格值走 `contentText`。
+   > **（07:45 修正标注，见文首）**：前半句的裁决不变；后半句「会把走秒数字从胶囊里挤掉」是据官方优先级做的**推断**，这台机器上**不设也没让数字进胶囊**——胶囊显示「冥想中」。这句不再作为观感结论使用，原文保留。
+2. **「回主界面突然嘣一声」从根上修掉。**
+   病根是三处都能宣布结束、都自己播结束铃，且没有「这一轮响过没有」的凭据（C 组真机坐实：进程被强杀后冷启动 `restore()` 补响）。现在：
+   - 全 App 只有 `TimerEngine.settleIfDue(now, allowBell)` 能写完成态并播结束铃，判定规则抽到纯函数 `SettlementPolicy.decide()`；
+   - 每轮 `start()` 发唯一 `runId` 并**同步 `commit()` 落盘**；结算时**先写 `endBellFiredFor = runId` 凭据，再发声**，进程在两行之间被杀只会漏响、绝不会下次回来再响；
+   - `restore()` 两处补算一律 `allowBell = false`：**只显示「已完成」，绝不补响**；重复冷启动命中凭据只摆完成态，一个音符都不发；
+   - `MainActivity` 的 200ms 周期 `TimerEngine.tick()` 删除，界面只读 StateFlow，不再当第二个状态机写入者。前台服务 250ms 心跳是唯一允许发声的调用方。
+3. **三语言完成态文案同步**：`catchup` 从「铃声补响」改为「已在后台结束，未补响铃」/「未補響鈴」/「no bell replay」，界面不再暗示补响过。
+4. **档位不变**：仍是单版本 `1 / 3 / 5 / 10 / 15 / 20 / 30 / 45 / 60 / 90 / 120 / 无限`；滑动任意时长按 04:03 裁决暂缓，未实现。
+
+**离线验收（跑了产品源码，不是复刻）**：`.craft/testcases/TcMain.kt` 直接编译 `StyleSelector.kt` + `SettlementPolicy.kt` 后在 JVM 上跑 —— TC-H 决策表 16 条、160 组全组合不变量穷举、结算 9 条，**24 PASS / 0 FAIL**；`.craft/testcases/tc_static.py` 对生产源码做 H8~H12 与唯一结算入口的代码审查断言，**21 PASS / 0 FAIL**。
+**没验的如实说**：本机无 emulator / AVD / 系统镜像，非小米真机 H1/H2 仍是「未验」；NotePro15 只能覆盖官方胶囊与 HyperOS 焦点两格，**不得写成「全机型已验」**。`SystemUI` 是否真为第三方渲染 `miui.focus.param` 仍未证实，所以私有通道只是可选增益，系统忽略它时这条通知仍是合法标准通知。
+
+> **真机回归结果（07:14 补，详见 `证据核查-2026-11-08.md` E16）**：NotePro15 上 **9 PASS / 0 FAIL**。1 分钟准点结束铃恰好一次（`piid:172575`）；`am force-stop` 等过点后回主界面新增音频播放器 **0 个**，界面逐字显示「本次练习已在后台结束，未补响铃」；再冷启动仍 0 声 —— **C 组那声「嘣」已消失**。计时中 `android.shortCriticalText` 已消失，基础走秒字段与 `miui.focus.param` 都在。
+> **同一次验收抓到一个必须追的问题**：官方 `PROMOTED_ONGOING` 与 `android.requestPromotedOngoing` 在 v2.12 里不见了（v2.11 有）。设备日志 `reason=... notification not promotable`，权限却 granted。定位为现场自检的自证循环，修在 **v2.13**，见 E17。**v2.12 不作为最终发布版**。
+
+## v2.13（versionCode 14，2026-11-09，修通知能力自检的自证循环）
+
+只改一处：`NotificationContract.probePromotable()` 原来拿「还没申请 promotion 的裸通知」去问
+`hasPromotableCharacteristics()`，拿到 false 又据此决定不申请 —— 恒 false。
+现在自检探针先走与正式组装共用的 `requestPromotion()`，再问资格；并把 `plain=… requested=…`
+这对对照值打进 logcat，结论可复核。计时、结算、响铃、档位一行未动。
+
+**验收（07:21 补，NotePro15，10 PASS / 0 FAIL）**：设备日志逐字 `promotable probe plain=false requested=true`、
+`notice layer=HYPEROS_FOCUS promoted=true alarmFallback=false focus=true suppressed=false sdk=36`；
+`dumpsys notification --noredact` 里 `flags=…|PROMOTED_ONGOING`、`android.requestPromotedOngoing` 与
+`miui.focus.param` 同时出现，`android.shortCriticalText` 仍不在、两条 chronometer 字段仍在。
+1 分钟到点结束铃仍恰好一次。**成因证实**：自检必须拿「已申请 promotion」的通知去问，
+不是 ROM 加码、不是权限、也不是 `shortCriticalText`。详见 `证据核查-2026-11-08.md` E17。
+
+> **（07:45 修正标注，见文首）**：本节「§5.6 的裁决成立」只指「不设 `shortCriticalText` 与拿到 L1 资格可以共存」——这一条 E17 的 `plain=false requested=true` 对照确实坐实了，**不受 E18 影响**。
+> 但「不设 ⇒ 胶囊里就是走秒数字」不成立：07:45 截图里胶囊显示「冥想中」。**资格生效 ≠ 文案达成**，两件事别再混写。
+
+## v2.11（versionCode 12，2026-11-08，测试专用短时长 + 完成态时长歧义）
+
+> v2.10（versionCode 11）在本文件缺一节，属前序记录遗漏；此处不补写未经核实的内容。
+
+两件事，均为当晚用户追加需求；逐字原话见 `FeatureMap-TestCase-整体设计.md` §3 台账 13 / 14 / 15。**第 13 条的初始方案已被第 15 条推翻，以第 15 条为准**。
+
+1. **内测短时长：1 / 3 分钟常驻，只做一个版本。**
+   用户定稿原话：「内测期间就保留1分钟和3分钟两档后……总之当前内测期间，增加时长选项，不做两个版本了。太麻烦且容易出问题」。
+   时长列表为固定的 `1 / 3 / 5 / 10 / 15 / 20 / 30 / 45 / 60 / 90 / 120 / 无限`，走完全相同的 `setDuration → start → tick → finish` 状态机。1 分钟把一轮真机回归从 5m30s 压到 1m30s。
+   **没做 30 秒**：那要把时长单位从整数分钟改成秒，会连带 `Presets.kt` 的 JSON schema、`duration_min` 持久化、`Lang.minutes()`、无限模式 `-1` 哨兵一起迁移，为省 30 秒引入迁移风险不划算。
+   **滑动可选任意时长：未决、未实现**。用户原话「但这个和克制、简洁和禅意是否冲突，未知，没想好」，没定之前保持固定选项。
+   > **11-09 04:03 裁决（以此为准）**：「结论是暂缓。以后再说」。状态由「未决」升级为**已裁决暂缓**——不实现、不排期、不留待办；日后由用户重新提出才单开一轮评估。发布包 v2.11 与固定档位均不变。上方 22:48 的「未决」原文保留作历史。
+   > 22:08 曾做过 `BuildConfig.TEST_DURATIONS` 双包方案（测试包 1/2 分钟、正式包不显示），22:48 已全部撤除：双版本让「装的是哪个包」变成新变量，真机结论与正式行为脱钩，还多一条装错包的风险。Gradle 属性、`buildConfigField`、两版 APK 产物均已清理，全局 grep 零命中。
+2. **完成态「圆圈 0:00、时长高亮 5 分钟、按钮还叫开始冥想」的歧义。**
+   先给答案：**点下去是完整 5 分钟，不是 0**（`mainAction()` 的 DONE 分支走 `start()`，`total = durationMin * 60_000L`）。逻辑没错，是视觉三套信号打架。现在 DONE 态按钮改「**再来一次 · 5 分钟**」（三语言新增 `btn_again`），圆环提示也拼上时长；时长选项不禁用 —— 完成态改时长会回 IDLE 且圆环同步变成新时长，所见即所得，禁用反而制造「为什么点不动」的新误会。
+   内在逻辑同时收敛：`start()` 开头按当前 `durationMin` 重算并写回 `totalMs / remainingMs / catchUp`。原先「无准备时间」分支不写回、`beginRunning()` 沿用上一次的 `totalMs`，与 `plannedEndWall` 可能不同源；现在 `plannedEndWall`、`endAt`、圆环进度只认同一个 total。
+
+**内测期脏数据也清了**：双包方案期间曾短暂出现过 2 分钟档，磁盘上可能残留 `duration_min=2`，定稿后会出现「圆环 2:00，但时长行没有对应档位」。`TimerEngine.sanitizeDuration()` 把 2 一次性归一到 3 并写回，`readSettings()` 与 `applyPreset()` 两处都走它。1 和 3 都是正式档，不需要任何构建分叉。
+
+**没动的部分**：当晚 C 组真机实验（`证据核查-2026-11-08.md` §8.7）已坐实「回主界面突然响一声」= 冷启动 `restore()` 补响，但本版**未改响铃逻辑**。修法按 `FeatureMap-TestCase-整体设计.md` §5 的整体设计（单一结算入口 + 一次性凭据）统一落地，不在 `restore()` 里加 if 打补丁。
+
+**✅ 2026-11-09 03:26 补验（以此为准，推翻下面 23:00 「UI 验收未完成」的说法）**：用户重连并解锁手机后，定稿 v2.11 单版本包三条 TC 已补验——**F1 通过**（横滑三屏拿全 12 档 `1/3/5/10/15/20/30/45/60/90/2 小时/无限`，时长行无 2 分钟；`2 分钟` 只在间隔铃/准备时间行，是上一轮误判根源）、**F3 通过**（点 3 分钟 → `3:00` → 起跑 4s `2:53` → 点 App 内「结束」回 IDLE `3:00`）、**F4 静态通过／真机未验**（机上 prefs 已是默认 10，旧 `duration_min=2` 残留不存在；release 非 debuggable + 无 root + 备份需人工确认，无法注入，不为一条边界用例编临时夹具包）。详见 `FeatureMap-TestCase-整体设计.md` §9.0.1。真机新口径：控件树必须含包名、横向选项行要滑到底、收尾点 App 内「结束」而非 `force-stop`。
+
+**真机验收口径（22:56 历史记录，原样保留）**：双包阶段的实测（1 分钟准点到点、完成态文案、1/2 档可见性）见 `FeatureMap-TestCase-整体设计.md` §9 过程记录；**定稿后以单版本重新验收为准**（§9.0）。验收中曾把「圆环 1:56」误判为代码缺陷，用户当场澄清是测试期间手动点了「2 分钟」——**真机脚本测到的异常必须先排除人工干预**，这条已写进用例口径。另：设备进入 Dozing 时 `uiautomator dump` 只返回锁屏 XML、脚本点击会落到 `(0,0)`；唤醒顺序 `keyevent 26` → `224` → 上滑。**定稿包 UI 验收未完成**：22:56 设备唤醒后停在「请用数字密码或指纹解锁」的 PIN 锁屏，装包虽成功（`versionCode=12 / 2.11`），TC-F1/F3/F4 需人工解锁后重跑。已验过且定稿版未改代码的两项：1 分钟准点到点、完成态按钮带时长。
+
 ## v2.9（versionCode 10，2026-11-08，Android 16 实机定位：通知权限 + 隐藏 API 崩溃）
 
 用户反馈（**Redmi Note 15 Pro / Android 16 / HyperOS**）：「锁屏时的计时界面（类似系统闹钟）看不到」「切到后台顶层看不到计时插件」；另一台 **Redmi 10X 4G（Android 12）**「通知栏能看到，但按钮只有 End」。

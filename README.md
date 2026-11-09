@@ -71,10 +71,12 @@
 
 ## 安装
 
-直接装 [`releases/静息计时-v2.9.apk`](releases/静息计时-v2.9.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
+> **当前稳定版：v2.17（versionCode 18，2026-11-09）**。本版先在仓库里放约一周观察，收集 Issue 反馈、按需修补，之后才考虑更广泛地推广；商店上架等推广动作**本轮不做**。四个显示表面的验收结论见下方「真机验收」与 [`CHANGELOG.md`](CHANGELOG.md)。遇到问题请走 GitHub Issues。
+
+直接装 [`releases/静息计时-v2.17.apk`](releases/静息计时-v2.17.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
 
 ```bash
-adb install -r releases/静息计时-v2.9.apk
+adb install -r releases/静息计时-v2.17.apk
 ```
 
 签名证书 SHA-256：`64047d9373cf2e7b942bf171e180c5b65c5e2601c68e9260c2b4aef55cc480d9`（`zentimer.jks`，主体 `CN=zentimer`，RSA 2048 / 有效期约 27 年）。
@@ -124,6 +126,10 @@ adb logcat -d | grep -i zentimer
 ```
 
 v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×2340 @440dpi）** 上实装验证：启动、控件树、抽屉、返回栈、截图与崩溃日志。**注意**：Android 15+ 才强制 edge-to-edge，低版本设备测不出顶部 insets 的最终效果，目标机红米 15 Pro 上的表现仍需目视确认；不同屏幕尺寸 / 折叠屏的适配按项目所有者要求**未做真机专项测试**。
+> **（2026-11-09 更新，以本段为准）**：上一段是 v2.3 时期记录，其中「红米 15 Pro 仍需目视确认」已在 v2.17 完成；原文保留作过程记录。
+
+**v2.17 稳定版验收**：在 Redmi Note 15 Pro（HyperOS / Android 16）上完成四个显示表面的真机像素验收 —— 顶栏胶囊显示实时倒计时；通知栏下拉与亮屏锁屏只保留一组走秒数字、中间一行统一「静坐中」；充电锁屏 AOD 只显示时钟图标 +「静坐中」，不给数字。字段层 13 项 + AOD 专项 14 项真机断言零失败；离线逻辑用例 24 项、静态审查 21 项、三语文案 110/110/110 零差异。逐项结论见 [`CHANGELOG.md`](CHANGELOG.md) 的 v2.16 / v2.17 两节。
+**边界如实写**：以上只覆盖这一台设备；非小米 Android 16、Android 8~15 机型的通知观感仍缺真机验证，欢迎通过 GitHub Issues 反馈。
 
 ---
 

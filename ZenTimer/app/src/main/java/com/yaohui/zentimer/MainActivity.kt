@@ -234,12 +234,8 @@ private fun StillScreen() {
     var backOnce by remember { mutableStateOf(false) }
     val running = s.running
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            TimerEngine.tick()
-            delay(200L)
-        }
-    }
+    // 界面只订阅 TimerEngine.ui 渲染，不再自己驱动状态机。
+    // 到点结算的唯一入口在前台服务心跳里；UI 再跑一套 tick 就会重新变成「两个写入者」。
     LaunchedEffect(toast) {
         if (toast != null) {
             delay(1800L)
@@ -675,7 +671,8 @@ private fun RingBlock(s: TimerEngine.Ui) {
     }
     val hint = when {
         s.catchUp -> Lang.t("catchup")
-        s.phase == TimerEngine.Phase.DONE -> Lang.t("hint_tap_again")
+        s.phase == TimerEngine.Phase.DONE ->
+            Lang.t("hint_tap_again") + " · " + Lang.minutes(s.durationMin)
         s.phase == TimerEngine.Phase.IDLE -> Lang.t("hint_tap_ring")
         else -> ""
     }
@@ -778,7 +775,10 @@ private fun ringSize(): Dp {
 @Composable
 private fun ActionRow(s: TimerEngine.Ui) {
     val mainText = when (s.phase) {
-        TimerEngine.Phase.IDLE, TimerEngine.Phase.DONE -> Lang.t("btn_start")
+        TimerEngine.Phase.IDLE -> Lang.t("btn_start")
+        // 完成态圆环停在 0:00，只写「开始冥想」会让人以为点下去是 0 秒。
+        // 把这一次真正会用的时长写进按钮，直接回答「是 0 还是 5 分钟」。
+        TimerEngine.Phase.DONE -> Lang.t("btn_again") + " · " + Lang.minutes(s.durationMin)
         TimerEngine.Phase.RUNNING, TimerEngine.Phase.PREP -> Lang.t("btn_pause")
         TimerEngine.Phase.PAUSED -> Lang.t("btn_resume")
     }
@@ -955,7 +955,11 @@ private fun SettingsCard(s: TimerEngine.Ui, onPick: (String) -> Unit) {
             // v2.3：时长 / 间隔 / 准备比挑铃声更常用，整组上移到卡片顶部，触达更近
             SectionLabel(Lang.t("section_duration"))
             OptionRow(
-                items = listOf(5, 10, 15, 20, 30, 45, 60, 90, 120, -1),
+                // 内测期常驻的短档 1 / 3 分钟。只有一个版本，不做构建分叉：
+                // 所有包一致，避免「装了测试包还是正式包」带来的行为偏差。
+                // 「滑动可选任意时长」11-09 04:03 已裁决：暂缓，以后再说。
+                // 不实现、不排期；保持固定档位，待用户重新提出再单开一轮评估。
+                items = listOf(1, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, -1),
                 selected = s.durationMin,
                 label = { Lang.minutes(it) },
                 onSelect = { TimerEngine.setDuration(it) }
