@@ -19,6 +19,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
@@ -46,6 +48,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,14 +72,14 @@ import kotlin.math.sin
  * 两套禅意色板：深色为冷墨蓝 + 暖米金；浅色为宣纸米白 + 赭金，
  * 保持同样的「底 / 浮起 / 卡片 / 强调 / 次级」层次，不做花哨配色。
  */
-private data class StillColors(
+internal data class StillColors(
     val bg: Color, val elevated: Color, val card: Color,
     val accent: Color, val accentDim: Color, val text: Color,
     val secondary: Color, val track: Color, val stroke: Color,
     val divider: Color, val isDark: Boolean
 )
 
-private val DarkPalette = StillColors(
+internal val DarkPalette = StillColors(
     bg = Color(0xFF080D14), elevated = Color(0xFF101923), card = Color(0xFF16222E),
     accent = Color(0xFFE8CFA0), accentDim = Color(0xFF8C7E63),
     text = Color(0xFFF3F0E9), secondary = Color(0xFF8C9BAA),
@@ -80,7 +87,7 @@ private val DarkPalette = StillColors(
     divider = Color(0xFF1B2834), isDark = true
 )
 
-private val LightPalette = StillColors(
+internal val LightPalette = StillColors(
     bg = Color(0xFFF6F1E6), elevated = Color(0xFFFFFBF3), card = Color(0xFFEFE7D8),
     accent = Color(0xFF8A6528), accentDim = Color(0xFFA8916C),
     text = Color(0xFF2C2620), secondary = Color(0xFF796F61),
@@ -88,13 +95,15 @@ private val LightPalette = StillColors(
     divider = Color(0xFFE3DAC9), isDark = false
 )
 
-private val LocalStillColors = staticCompositionLocalOf { DarkPalette }
+// v2.21：时长控件独立成 DurationField.kt，色板与 C 需跨文件可见，故由 private 放宽为
+// internal（仅本 module 可见），140 处调用点与主题注入方式一律不动。
+internal val LocalStillColors = staticCompositionLocalOf { DarkPalette }
 
 /**
  * 保留 C.xxx 这一层：140 处调用点一行都不用改，颜色由 StillTheme 按主题注入。
  * 只有两处 Canvas 的 DrawScope 不是 Composable 上下文，那里在绘制前先取局部变量。
  */
-private object C {
+internal object C {
     val bg: Color @Composable get() = LocalStillColors.current.bg
     val elevated: Color @Composable get() = LocalStillColors.current.elevated
     val card: Color @Composable get() = LocalStillColors.current.card
@@ -180,7 +189,12 @@ private fun StillTheme(content: @Composable () -> Unit) {
         Theme.Mode.LIGHT -> false
         Theme.Mode.SYSTEM -> isSystemInDarkTheme()
     }
-    val palette = if (dark) DarkPalette else LightPalette
+    // v2.25 四时：只把「纸色 + 强调色」两个 token 按进程启动时那次快照换掉，
+    // ink / 其余层次由 SeasonTheme.palette 从基准色板派生。深浅模式在这里仍只管亮暗。
+    val seasonOn by SeasonTheme.enabled.collectAsState()
+    val season = if (seasonOn) SeasonTheme.current else Season.AUTUMN
+    val base = if (dark) DarkPalette else LightPalette
+    val palette = SeasonTheme.palette(dark, season, base)
     val view = LocalView.current
     val ctx = LocalContext.current
 
@@ -232,6 +246,19 @@ private fun StillScreen() {
     var presetSheet by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
     var backOnce by remember { mutableStateOf(false) }
+    // v2.23：编辑目标由主页面统一持有，同一时刻只有一个时长行能展开（互斥）。
+    // 点圆环、点某一行、点空白、返回键都只改这一个值；圆环状态行据此换成编辑提示。
+    var editingTarget by remember { mutableStateOf<String?>(null) }
+    // v2.24：编辑分两层（四档 → 自定义滚轮）。只有滚轮层才有「确定」，圆环状态行
+    // 得知道当前在哪一层，否则在只有档位的界面上写「调好后点确定」是骗人。
+    var wheelShowing by remember { mutableStateOf(false) }
+    // v2.23：主页面的滚动状态提到这里，是为了让「点空白取消」能分辨
+    // 「用户只是想把页面滑动看清按钮」和「用户真的点了一下空白」。
+    // 真机 11-10 20:1x 实测：不加这个判断时，编辑态里向上滑 480px 页面能滚，
+    // 但同一次手势也被当成 tap，编辑态当场收起、改动回滚——正是 v2.21 删掉
+    // 「点空白取消」的那个老毛病，不能靠删功能回避，要把判据做对。
+    val pageScroll = rememberScrollState()
+    var tapDownScroll by remember { mutableIntStateOf(0) }
     val running = s.running
 
     // 界面只订阅 TimerEngine.ui 渲染，不再自己驱动状态机。
@@ -304,6 +331,9 @@ private fun StillScreen() {
                         )
                     }
 
+                    // v2.18：主页面滚动关掉 stretch overscroll，纯防御性收口。
+                    // 注意：用户 11-09 22:16 指出的「猛滑抖动」不在这里，而是在声音选择弹层
+                    // （SoundPicker 的 ModalBottomSheet 嵌套滚动），见 SoundPicker 处的说明。
                     when (screen) {
                         null -> if (running) {
                             Column(
@@ -326,8 +356,30 @@ private fun StillScreen() {
                                     .fillMaxWidth()
                                     .widthIn(max = 560.dp)
                                     .safeDrawingPadding()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                                    // v2.23：恢复整页可滚。v2.22 曾为躲开滚轮与页面抢手势而
+                                    // 冻结滚动，结果展开靠下的「准备时间」时取消/确定被顶出
+                                    // 屏幕且滚不动，成了死锁（用户 11-10 定性 BUG）。现在靠
+                                    // 三件事同时兜住：滚轮自己 requestDisallowInterceptTouchEvent、
+                                    // 展开时 bringIntoView 把编辑区滚进视野、点空白即取消。
+                                    .verticalScroll(pageScroll, overscrollEffect = null)
+                                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                                    // 点任意空白即取消编辑。但「按下时的滚动位置」必须等于
+                                    // 「抬起时的滚动位置」才算数：页面一旦被拖动过，这次手势
+                                    // 的目的是把取消/确定滑进视野，不是退出编辑。
+                                    .pointerInput(editingTarget) {
+                                        if (editingTarget == null) return@pointerInput
+                                        detectTapGestures(
+                                            onPress = {
+                                                tapDownScroll = pageScroll.value
+                                                tryAwaitRelease()
+                                            },
+                                            onTap = {
+                                                if (pageScroll.value == tapDownScroll) {
+                                                    editingTarget = null
+                                                }
+                                            }
+                                        )
+                                    },
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 TopBar(
@@ -335,13 +387,30 @@ private fun StillScreen() {
                                     onPresets = { presetSheet = true }
                                 )
                                 Spacer(Modifier.height(12.dp))
-                                RingBlock(s)
+                                RingBlock(
+                                    s,
+                                    editing = editingTarget != null,
+                                    wheelShowing = wheelShowing,
+                                    onEditDuration = { editingTarget = "duration" }
+                                )
                                 Spacer(Modifier.height(20.dp))
                                 ActionRow(s)
                                 // v2.3 修订：预设改为顶栏书签 + 底部面板，主屏不再为它留整块区域。
                                 // 时长 / 间隔 / 准备这些每次都要调的控件回到首屏，不再被挤到折叠线以下。
                                 Spacer(Modifier.height(16.dp))
-                                SettingsCard(s, onPick = { picker = it })
+                                SettingsCard(
+                                    s,
+                                    editingTarget = editingTarget,
+                                    onStageChange = { wheelShowing = it },
+                                    onEditingChange = { key, on ->
+                                        editingTarget = when {
+                                            on -> key
+                                            editingTarget == key -> null
+                                            else -> editingTarget
+                                        }
+                                    },
+                                    onPick = { picker = it }
+                                )
                                 Spacer(Modifier.height(20.dp))
                             }
                         }
@@ -351,7 +420,7 @@ private fun StillScreen() {
                                 .fillMaxWidth()
                                 .widthIn(max = 560.dp)
                                 .safeDrawingPadding()
-                                .verticalScroll(rememberScrollState())
+                                .verticalScroll(rememberScrollState(), overscrollEffect = null)
                                 .padding(horizontal = 20.dp, vertical = 16.dp)
                         ) {
                             SubPageBar(
@@ -659,20 +728,25 @@ private fun DrawerItem(icon: Int, label: String, onClick: () -> Unit) {
 // ---------- 圆环 ----------
 
 @Composable
-private fun RingBlock(s: TimerEngine.Ui) {
+private fun RingBlock(
+    s: TimerEngine.Ui,
+    editing: Boolean = false,
+    wheelShowing: Boolean = false,
+    onEditDuration: (() -> Unit)? = null
+) {
     val displayMs = if (s.phase == TimerEngine.Phase.PREP || (s.phase == TimerEngine.Phase.PAUSED && s.prepLeftMs > 0L))
         s.prepLeftMs else s.remainingMs
     val stateKey = when (s.phase) {
         TimerEngine.Phase.IDLE -> "state_idle"
         TimerEngine.Phase.PREP -> "state_prep"
-        TimerEngine.Phase.RUNNING -> if (s.infinite) "state_infinite" else "state_running"
+        TimerEngine.Phase.RUNNING -> "state_running"
         TimerEngine.Phase.PAUSED -> "state_paused"
         TimerEngine.Phase.DONE -> "state_done"
     }
     val hint = when {
         s.catchUp -> Lang.t("catchup")
         s.phase == TimerEngine.Phase.DONE ->
-            Lang.t("hint_tap_again") + " · " + Lang.minutes(s.durationMin)
+            Lang.t("hint_tap_again") + " · " + Lang.durationLabel(s.durationMin)
         s.phase == TimerEngine.Phase.IDLE -> Lang.t("hint_tap_ring")
         else -> ""
     }
@@ -684,20 +758,43 @@ private fun RingBlock(s: TimerEngine.Ui) {
         RingCanvas(s.progress)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { TimerEngine.mainAction() }
+            modifier = Modifier.clickable {
+                // v2.23 用户拍板：静止态点圆环改静坐时长；计时中仍走暂停/继续。
+                // 沉浸式全屏（没有设置卡片）不传 onEditDuration，保持原来的主动作。
+                if (onEditDuration != null &&
+                    (s.phase == TimerEngine.Phase.IDLE || s.phase == TimerEngine.Phase.DONE)
+                ) onEditDuration()
+                else TimerEngine.mainAction()
+            }
         ) {
+            // v2.24：时长放宽到 23:59 后倒计时会变成 `23:59:00`，比 `15:00` 多三位。
+            // 圆环直径恒 268dp，60sp 会撑破；只要是「时:分:秒」就降一档字号。
+            val timeText = TimerEngine.formatTime(displayMs)
             Text(
-                text = TimerEngine.formatTime(displayMs),
+                text = timeText,
                 color = C.text,
-                fontSize = 60.sp,
+                fontSize = if (timeText.count { it == ':' } > 1) 44.sp else 60.sp,
                 fontWeight = FontWeight.Light,
                 letterSpacing = 1.sp
             )
             Spacer(Modifier.height(8.dp))
-            Text(text = Lang.t(stateKey), color = C.secondary, fontSize = 13.sp)
+            Text(
+                // v2.24：只有滚轮层才有「确定」；档位层回到正常状态词，不误导。
+                text = if (editing && wheelShowing && s.phase == TimerEngine.Phase.IDLE)
+                    Lang.t("duration_editing") else Lang.t(stateKey),
+                color = C.secondary,
+                fontSize = 13.sp
+            )
             if (hint.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(text = hint, color = C.accentDim, fontSize = 11.sp)
+            }
+            // v2.25：只在规则确实激活且正在计时时写这一行小字，结束即消失。
+            // 不做图标、不做提示条，也不另起状态。
+            val dndActive by DndGuard.active.collectAsState()
+            if (dndActive && s.running) {
+                Spacer(Modifier.height(4.dp))
+                Text(text = Lang.t("dnd_active"), color = C.accentDim, fontSize = 11.sp)
             }
         }
     }
@@ -776,7 +873,7 @@ private fun ringSize(): Dp {
 private fun ActionRow(s: TimerEngine.Ui) {
     val mainText = when (s.phase) {
         TimerEngine.Phase.IDLE -> Lang.t("btn_start")
-        // 完成态圆环停在 0:00，只写「开始冥想」会让人以为点下去是 0 秒。
+        // 完成态圆环停在 0:00，只写「开始静坐」会让人以为点下去是 0 秒。
         // 把这一次真正会用的时长写进按钮，直接回答「是 0 还是 5 分钟」。
         TimerEngine.Phase.DONE -> Lang.t("btn_again") + " · " + Lang.minutes(s.durationMin)
         TimerEngine.Phase.RUNNING, TimerEngine.Phase.PREP -> Lang.t("btn_pause")
@@ -944,7 +1041,13 @@ private fun PresetSheet(
 // ---------- 主页设置卡片：时间在上、铃声在下 ----------
 
 @Composable
-private fun SettingsCard(s: TimerEngine.Ui, onPick: (String) -> Unit) {
+private fun SettingsCard(
+    s: TimerEngine.Ui,
+    editingTarget: String?,
+    onStageChange: (Boolean) -> Unit,
+    onEditingChange: (String, Boolean) -> Unit,
+    onPick: (String) -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -953,37 +1056,47 @@ private fun SettingsCard(s: TimerEngine.Ui, onPick: (String) -> Unit) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             // v2.3：时长 / 间隔 / 准备比挑铃声更常用，整组上移到卡片顶部，触达更近
-            SectionLabel(Lang.t("section_duration"))
-            OptionRow(
-                // 内测期常驻的短档 1 / 3 分钟。只有一个版本，不做构建分叉：
-                // 所有包一致，避免「装了测试包还是正式包」带来的行为偏差。
-                // 「滑动可选任意时长」11-09 04:03 已裁决：暂缓，以后再说。
-                // 不实现、不排期；保持固定档位，待用户重新提出再单开一轮评估。
-                items = listOf(1, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, -1),
-                selected = s.durationMin,
-                label = { Lang.minutes(it) },
-                onSelect = { TimerEngine.setDuration(it) }
+            // v2.21：三个时长共用同一个就地滚轮组件。11-09 04:03 那条
+            // 「任意时长暂缓，日后由用户重新提出才单开一轮」的触发条件已满足，本轮开启。
+            // v2.21 那套 12 个固定档位胶囊已退场：想坐 37 分钟不必再选 40。
+            // v2.24 按用户拍板另起一层「四档 + 自定义」：只有静坐时长和准备时间有，
+            // 且不是常驻胶囊——点开才出现，点自定义才进滚轮。提醒间隔仍直接进滚轮。
+            // v2.22：显示态改成与下面 SettingRow 完全同构的一行（15sp 标签 / 12sp 值 /
+            // 12dp 行内距 / 1px 细线），三行时长 + 四行铃声就是同一张设置清单，中间不再
+            // 夹 spacer 和重复分隔线，节奏一致、也不再有 30sp 大数字独占一行焦点。
+            DurationSetting(
+                label = Lang.t("section_duration"),
+                value = s.durationMin,
+                mode = DurationMode.HOUR_MINUTE,
+                enabled = !s.running,
+                editing = editingTarget == "duration",
+                onEditingChange = { onEditingChange("duration", it) },
+                onCommit = { TimerEngine.setDuration(it) },
+                onStageChange = onStageChange
+            )
+            DurationSetting(
+                label = Lang.t("section_interval"),
+                value = s.intervalMin,
+                mode = DurationMode.MINUTES_ONLY,
+                enabled = !s.running,
+                editing = editingTarget == "interval",
+                onEditingChange = { onEditingChange("interval", it) },
+                onCommit = { TimerEngine.setInterval(it) },
+                onStageChange = onStageChange
+            )
+            DurationSetting(
+                label = Lang.t("section_prep"),
+                value = s.prepSec,
+                mode = DurationMode.MINUTE_SECOND,
+                enabled = !s.running,
+                editing = editingTarget == "prep",
+                onEditingChange = { onEditingChange("prep", it) },
+                onCommit = { TimerEngine.setPrep(it) },
+                onStageChange = onStageChange
             )
 
-            SectionLabel(Lang.t("section_interval"))
-            OptionRow(
-                items = listOf(0, 2, 5, 10, 15),
-                selected = s.intervalMin,
-                label = { if (it == 0) Lang.off() else Lang.minutes(it) },
-                onSelect = { TimerEngine.setInterval(it) }
-            )
-
-            SectionLabel(Lang.t("section_prep"))
-            OptionRow(
-                items = listOf(0, 10, 30, 60, 180, 300),
-                selected = s.prepSec,
-                label = { if (it == 0) Lang.off() else Lang.seconds(it) },
-                onSelect = { TimerEngine.setPrep(it) }
-            )
-
-            Spacer(Modifier.height(12.dp))
-            SettingDivider()
-
+            // 第三行时长自己已经画了 1px 细线，这里不再补 spacer + 第二条分隔线，
+            // 否则三行时长和四行铃声之间会出现一条比别处宽一倍的缝。
             val sb = SoundCatalog.bell(s.startBell)
             val ib = SoundCatalog.bell(s.intervalBell)
             val eb = SoundCatalog.bell(s.endBell)
@@ -1088,39 +1201,8 @@ private fun SectionLabel(text: String) {
     )
 }
 
-@Composable
-private fun OptionRow(
-    items: List<Int>,
-    selected: Int,
-    label: (Int) -> String,
-    onSelect: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items.forEach { v ->
-            val on = v == selected
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (on) C.accent else Color.Transparent)
-                    .border(1.dp, if (on) C.accent else C.stroke, RoundedCornerShape(20.dp))
-                    .clickable { onSelect(v) }
-                    .padding(horizontal = 15.dp, vertical = 9.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label(v),
-                    color = if (on) C.bg else C.secondary,
-                    fontSize = 13.sp
-                )
-            }
-        }
-    }
-}
+// v2.21：旧的固定档位胶囊 OptionRow 彻底退场。三个时长现在共用 DurationField.kt 的
+// DurationSetting，任意值、就地编辑、取消回滚都由那一个组件负责，不再有两套行为。
 
 // ---------- 声音选择器：反复试听，人工确认才生效 ----------
 
@@ -1134,12 +1216,12 @@ private fun SoundPicker(key: String, s: TimerEngine.Ui, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val isAmbience = key == "ambience"
     val pool = if (isAmbience) SoundCatalog.ambiences else SoundCatalog.bells
-    val current = when (key) {
+    val current = SoundCatalog.canonicalBell(when (key) {
         "start" -> s.startBell
         "interval" -> s.intervalBell
         "end" -> s.endBell
         else -> s.ambience
-    }
+    })
     val title = when (key) {
         "start" -> Lang.t("picker_start")
         "interval" -> Lang.t("picker_interval")
@@ -1163,6 +1245,15 @@ private fun SoundPicker(key: String, s: TimerEngine.Ui, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = { close() },
         sheetState = sheetState,
+        // v2.19 · 真机 A/B 复现（11-09 22:24，M2003J15SC / Android 12）：
+        // 在网格顶部猛地向下甩，Material3 给弹层装的
+        // ConsumeSwipeWithinBottomSheetBoundsNestedScrollConnection 会把网格吃剩的位移/惯性
+        // 直接 dispatchRawDelta 给 sheet 的 anchoredDraggableState，整张卡片被拽下再弹回，
+        // 表现就是「界面上下抖动」；往回滑一点离开列表顶部、没有余量外溢，就立刻不抖。
+        // 开始铃 / 间隔铃 / 结束铃 / 背景音共用这一个 SoundPicker，所以四处同一个毛病。
+        // 关掉弹层手势后该 nestedScroll 连接不再安装（material3 1.4.0 字节码已核），
+        // 滚动、惯性全部留在网格里。出口仍齐全：取消 / 确定 / 点遮罩 / 返回键。
+        sheetGesturesEnabled = false,
         containerColor = C.elevated,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
@@ -1466,6 +1557,7 @@ private fun SavePresetDialog(ctx: Context, onDismiss: () -> Unit, onDone: (Strin
 private fun SettingsPage(ctx: Context, onToast: (String) -> Unit) {
     val cur by Lang.mode.collectAsState()
     val themeMode by Theme.mode.collectAsState()
+    val timerUi by TimerEngine.ui.collectAsState()
 
     SectionLabel(Lang.t("settings_language"))
     Row(
@@ -1553,6 +1645,70 @@ private fun SettingsPage(ctx: Context, onToast: (String) -> Unit) {
     }
     Spacer(Modifier.height(10.dp))
     Text(text = Lang.t("theme_note"), color = C.secondary, fontSize = 12.sp)
+    Spacer(Modifier.height(14.dp))
+    // v2.25 四时：并进「外观」这一组，不新增顶级设置项。静坐中置灰 ——
+    // 「静坐进行中绝不换色」比让用户随时能改开关更硬，改开关等坐完再说。
+    val seasonOn by SeasonTheme.enabled.collectAsState()
+    val inSitting = timerUi.running
+    SettingToggle(
+        title = Lang.t("season_fine_tune"),
+        note = if (inSitting) Lang.t("season_note_running") else Lang.t("season_note"),
+        on = seasonOn,
+        enabled = !inSitting,
+        onToggle = { SeasonTheme.setEnabled(ctx, !seasonOn) }
+    )
+    Spacer(Modifier.height(28.dp))
+    HorizontalDivider(thickness = 1.dp, color = C.divider)
+    Spacer(Modifier.height(24.dp))
+
+    // v2.25 · 静坐时免打扰：一行开关，不新增页面、不弹二次询问。
+    // 授权页交给系统；拒绝后开关弹回关闭并留一行说明，全程不阻断静坐。
+    // 每次从系统设置返回都现读一次真实权限，绝不把「点了开关」当成「已授权」。
+    var dndRefresh by remember { mutableIntStateOf(0) }
+    val dndSupported = remember(dndRefresh) { DndGuard.available() }
+    val dndGranted = remember(dndRefresh) { DndGuard.granted(ctx) }
+    var dndOn by remember(dndRefresh) { mutableStateOf(DndGuard.effectiveOn(ctx)) }
+    // 初值不能只认「本次拒绝授权返回」：用户在系统设置里事后撤销权限，
+    // 下次冷启动同样要看到这句说明，否则一个关着的开关没有任何解释（方案 C7）。
+    var dndDenied by remember(dndRefresh) {
+        mutableStateOf(DndGuard.enabled(ctx) && !DndGuard.granted(ctx))
+    }
+    val dndLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val ok = DndGuard.granted(ctx)
+        DndGuard.setEnabled(ctx, ok)
+        dndOn = ok
+        dndDenied = !ok
+        dndRefresh++
+    }
+    SettingToggle(
+        title = Lang.t("dnd_title"),
+        note = if (dndSupported) Lang.t("dnd_sub") else Lang.t("dnd_unsupported"),
+        on = dndOn,
+        enabled = dndSupported,
+        onToggle = {
+            if (!dndOn && !dndGranted) {
+                dndDenied = false
+                val failed = runCatching {
+                    dndLauncher.launch(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                }.isFailure
+                if (failed) {
+                    DndGuard.setEnabled(ctx, false)
+                    dndOn = false
+                    dndDenied = true
+                }
+            } else {
+                DndGuard.setEnabled(ctx, !dndOn)
+                dndOn = !dndOn
+                dndDenied = false
+            }
+        }
+    )
+    if (dndDenied) {
+        Spacer(Modifier.height(8.dp))
+        Text(text = Lang.t("dnd_denied"), color = C.secondary, fontSize = 12.sp)
+    }
     Spacer(Modifier.height(28.dp))
     HorizontalDivider(thickness = 1.dp, color = C.divider)
     Spacer(Modifier.height(24.dp))
@@ -1618,6 +1774,67 @@ private fun SettingsPage(ctx: Context, onToast: (String) -> Unit) {
     Text(text = Lang.t("settings_bell_times"), color = C.secondary, fontSize = 13.sp)
 }
 
+/**
+ * v2.25：两处新开关共用的「一行开关」。不用 Material3 默认 Switch —— 它的品牌色和
+ * 这屏的宣纸底不搭；这里只用色板里已有的 accent / track / stroke 画一个 40×22dp 小拨钮，
+ * 与设置页既有卡片、边框、字号阶梯保持一致。整行可点，禁用时整块降透明度。
+ */
+@Composable
+private fun SettingToggle(
+    title: String,
+    note: String,
+    on: Boolean,
+    enabled: Boolean = true,
+    onToggle: () -> Unit
+) {
+    // 自绘拨钮没有 Switch 的内建语义，TalkBack 原本只会读标题、读不出「开 / 关」。
+    // 这里把角色、状态、说明一次性合成一条无障碍描述，验收脚本也能从控件树直接判状态。
+    val stateWord = if (on) Lang.t("switch_on") else Lang.t("switch_off")
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(enabled = enabled) { onToggle() }
+            .alpha(if (enabled) 1f else 0.5f)
+            .clearAndSetSemantics {
+                role = Role.Switch
+                stateDescription = stateWord
+                contentDescription = "$title，$stateWord，$note"
+            },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = C.card),
+        border = BorderStroke(1.dp, C.stroke)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, color = C.text, fontSize = 15.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(text = note, color = C.secondary, fontSize = 12.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(width = 40.dp, height = 22.dp)
+                    .clip(CircleShape)
+                    .background(if (on) C.accent else C.track)
+                    .border(1.dp, if (on) C.accent else C.stroke, CircleShape),
+                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(3.dp)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(if (on) C.bg else C.secondary)
+                )
+            }
+        }
+    }
+}
+
 /** 跳到本应用的通知设置；个别 ROM 没有该页面时退回应用详情页。 */
 private fun openNotificationSettings(ctx: Context) {
     val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -1672,37 +1889,62 @@ private fun AboutPage(ctx: Context, onToast: (String) -> Unit) {
     ContactGrid(ctx, onToast)
     Spacer(Modifier.height(14.dp))
 
-    // v2.3 打赏：按用户决定只做「提示添加微信打赏」，点一下复制微信号并唤起微信
+    // v2.21（推翻 v2.20「压成一行」，原结论留在 CHANGELOG / FeatureMap §10 作对照）：
+    // 用户 11-10 07:1x 逐字「打赏的设计，让人感觉重点是加微信，而不是打赏。打赏的表达
+    // 不清晰……不符合让用户一看就懂。会失去焦点（我们想传达的信息）」。
+    // 病根不是减法，是把标题也减掉了，整块区域的视觉主语变成微信号。
+    // 恢复带细边框的区域框，把「打赏」放回标题，微信号降为卡片内第三行。
+    // 保留 v2.20 做对的两件事：不唤起微信、不弹第二个复制气泡。
+    var copiedWechat by remember { mutableStateOf(false) }
+    LaunchedEffect(copiedWechat) {
+        if (copiedWechat) {
+            delay(2000)
+            copiedWechat = false
+        }
+    }
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable {
-                AppInfo.copy(ctx, AppInfo.WECHAT)
-                val opened = AppInfo.openWechat(ctx)
-                onToast(if (opened) Lang.t("donate_hint") else Lang.t("donate_open_failed"))
-            },
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = C.card),
         border = BorderStroke(1.dp, C.accentDim)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = Lang.t("donate_title"), color = C.accent, fontSize = 15.sp)
-                Spacer(Modifier.height(5.dp))
-                Text(text = Lang.t("donate_body"), color = C.secondary, fontSize = 12.sp)
-                Spacer(Modifier.height(7.dp))
-                Text(text = AppInfo.WECHAT, color = C.text, fontSize = 13.sp, letterSpacing = 1.sp)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = Lang.t("donate_title"), color = C.accent, fontSize = 15.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = Lang.t("donate_body"),
+                color = C.secondary,
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            )
+            Spacer(Modifier.height(9.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { if (AppInfo.copy(ctx, AppInfo.WECHAT)) copiedWechat = true },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = AppInfo.WECHAT,
+                    color = C.text,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = if (copiedWechat) Lang.t("copied") else Lang.t("action_copy"),
+                    color = C.accentDim,
+                    fontSize = 12.sp
+                )
             }
-            Spacer(Modifier.width(8.dp))
-            Text(text = "›", color = C.accent, fontSize = 22.sp)
         }
     }
     Spacer(Modifier.height(8.dp))
-    Text(text = Lang.t("donate_note"), color = C.accentDim, fontSize = 11.sp)
+    Text(text = Lang.t("donate_hint"), color = C.accentDim, fontSize = 11.sp, lineHeight = 17.sp)
+    Spacer(Modifier.height(4.dp))
+    Text(text = Lang.t("donate_note"), color = C.accentDim, fontSize = 11.sp, lineHeight = 17.sp)
     Spacer(Modifier.height(20.dp))
 
     AboutRow(
@@ -1731,6 +1973,14 @@ private fun AboutPage(ctx: Context, onToast: (String) -> Unit) {
 /** 一栏放下四项联系信息：2×2 紧凑网格，点某一项仍保留原来的复制 / 邮件动作。 */
 @Composable
 private fun ContactGrid(ctx: Context, onToast: (String) -> Unit) {
+    // 复制反馈改在格子内的行尾小字，2 秒回退；不再弹自定义 Toast（系统已有一份）。
+    var copiedKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(copiedKey) {
+        if (copiedKey != null) {
+            delay(2000)
+            copiedKey = null
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -1742,18 +1992,23 @@ private fun ContactGrid(ctx: Context, onToast: (String) -> Unit) {
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 ContactCell(Lang.t("about_author"), AppInfo.AUTHOR, null)
-                ContactCell(Lang.t("about_email"), AppInfo.EMAIL) {
-                    if (!AppInfo.mail(ctx)) onToast(AppInfo.EMAIL)
-                }
+                ContactCell(
+                    Lang.t("about_email"), AppInfo.EMAIL,
+                    { if (!AppInfo.mail(ctx)) onToast(AppInfo.EMAIL) }
+                )
             }
             Spacer(Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                ContactCell(Lang.t("about_wechat"), AppInfo.WECHAT) {
-                    if (AppInfo.copy(ctx, AppInfo.WECHAT)) onToast(Lang.t("copied"))
-                }
-                ContactCell(Lang.t("about_official"), AppInfo.OFFICIAL_ACCOUNT) {
-                    if (AppInfo.copy(ctx, AppInfo.OFFICIAL_ACCOUNT)) onToast(Lang.t("copied"))
-                }
+                ContactCell(
+                    Lang.t("about_wechat"), AppInfo.WECHAT,
+                    { if (AppInfo.copy(ctx, AppInfo.WECHAT)) copiedKey = "wechat" },
+                    if (copiedKey == "wechat") Lang.t("copied") else Lang.t("action_copy")
+                )
+                ContactCell(
+                    Lang.t("about_official"), AppInfo.OFFICIAL_ACCOUNT,
+                    { if (AppInfo.copy(ctx, AppInfo.OFFICIAL_ACCOUNT)) copiedKey = "official" },
+                    if (copiedKey == "official") Lang.t("copied") else Lang.t("action_copy")
+                )
             }
             Spacer(Modifier.height(10.dp))
             Text(text = Lang.t("about_contact_body"), color = C.accentDim, fontSize = 11.sp)
@@ -1762,15 +2017,27 @@ private fun ContactGrid(ctx: Context, onToast: (String) -> Unit) {
 }
 
 @Composable
-private fun RowScope.ContactCell(label: String, value: String, onClick: (() -> Unit)?) {
+private fun RowScope.ContactCell(
+    label: String,
+    value: String,
+    onClick: (() -> Unit)?,
+    trailing: String? = null
+) {
     Column(
         modifier = Modifier
             .weight(1f)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(8.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = 2.dp)
     ) {
-        Text(text = label, color = C.secondary, fontSize = 10.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = label, color = C.secondary, fontSize = 10.sp)
+            if (trailing != null) {
+                Spacer(Modifier.width(6.dp))
+                Text(text = trailing, color = C.accentDim, fontSize = 10.sp)
+            }
+        }
         Spacer(Modifier.height(3.dp))
         Text(
             text = value,

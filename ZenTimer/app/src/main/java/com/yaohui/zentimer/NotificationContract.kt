@@ -38,10 +38,10 @@ object NotificationContract {
     /** 官方 chip 文本字段；只在这台「胶囊不认 chronometer」的 ROM 上按能力启用。 */
     private const val KEY_SHORT_CRITICAL = "android.shortCriticalText"
 
-    /** 顶栏胶囊要的实时倒计时文本（如 0:48）；无限模式与暂停/完成态不给。 */
+    /** 顶栏胶囊要的实时倒计时文本（如 0:48）；暂停 / 完成态不给。 */
     private fun chipText(s: TimerEngine.Ui): String? {
         val ticking = s.phase == TimerEngine.Phase.RUNNING || s.phase == TimerEngine.Phase.PREP
-        if (!ticking || s.infinite) return null
+        if (!ticking) return null
         val left = if (s.phase == TimerEngine.Phase.PREP) s.prepLeftMs else s.remainingMs
         return TimerEngine.formatTime(left)
     }
@@ -84,18 +84,18 @@ object NotificationContract {
     private fun stateWord(s: TimerEngine.Ui): String = when (s.phase) {
         TimerEngine.Phase.PREP -> Lang.t("state_prep")
         TimerEngine.Phase.PAUSED -> Lang.t("state_paused")
-        TimerEngine.Phase.RUNNING -> if (s.infinite) Lang.t("state_infinite") else Lang.t("state_running")
+        TimerEngine.Phase.RUNNING -> Lang.t("state_running")
         else -> Lang.t("state_idle")
     }
 
     private fun buildBase(ctx: Context, s: TimerEngine.Ui): Notification.Builder {
         val left = if (s.phase == TimerEngine.Phase.PREP) s.prepLeftMs else s.remainingMs
         val ticking = s.phase == TimerEngine.Phase.PREP || s.phase == TimerEngine.Phase.RUNNING
-        val countdown = ticking && !s.infinite
+        val countdown = ticking
         val now = System.currentTimeMillis()
 
         // 计时中正文留空，数字只由系统那一份提供；暂停时才把定格值写进正文。
-        val body = if (!ticking && !s.infinite) TimerEngine.formatTime(left) else ""
+        val body = if (!ticking) TimerEngine.formatTime(left) else ""
 
         // 08:18 用户裁决：卡片正文只显示状态词「静坐中」，不再放第二组数字。
         // 顶栏的实时倒计时改由 shortCriticalText 单独喂（见 applyFocusLayer）：
@@ -115,7 +115,7 @@ object NotificationContract {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setUsesChronometer(ticking)
             .setChronometerCountDown(countdown)
-            .setWhen(if (ticking) (if (s.infinite) now - left else now + left) else 0L)
+            .setWhen(if (ticking) now + left else 0L)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
@@ -175,7 +175,7 @@ object NotificationContract {
 
     private fun applyOfficialLayer(ctx: Context, b: Notification.Builder, s: TimerEngine.Ui, d: StyleSelector.Decision) {
         if (d.requestPromoted) requestPromotion(b)
-        if (d.useAlarmClockFallback && s.phase == TimerEngine.Phase.RUNNING && !s.infinite) {
+        if (d.useAlarmClockFallback && s.phase == TimerEngine.Phase.RUNNING) {
             applyAlarmClock(ctx, b, s.remainingMs)
         }
     }
@@ -221,7 +221,7 @@ object NotificationContract {
         // 08:31 补充：AOD 胶囊与顶栏胶囊共用这个字段，息屏时必须去掉，
         // 否则充电锁屏会显示倒计时数字而不是「时钟 LOGO + 静坐中」。
         if (screenOn) chipText(s)?.let { b.extras.putString(KEY_SHORT_CRITICAL, it) }
-        val ticking = s.phase == TimerEngine.Phase.RUNNING && !s.infinite
+        val ticking = s.phase == TimerEngine.Phase.RUNNING
         val now = System.currentTimeMillis()
         val whenEnd = now + s.remainingMs
 

@@ -26,6 +26,9 @@ data class Sound(
 object SoundCatalog {
 
     val bells = listOf(
+        // 「无」= 这一项根本不响（res=0，BellPlayer.play 直接 return）。
+        // v2.19：旧的 b_silent（空白音轨）不再单列，避免选择器里出现两张「无声」卡。
+        Sound("none",      0,                      R.drawable.ic_amb_none, "无", "無", "None"),
         Sound("b_basu",    R.raw.b_basu,    R.drawable.ic_b_basu,    "颂钵 · Basu",    "頌缽 · Basu",    "Singing Bowl · Basu"),
         Sound("b_dengze",  R.raw.b_dengze,  R.drawable.ic_b_dengze,  "颂钵 · Dengze",  "頌缽 · Dengze",  "Singing Bowl · Dengze"),
         Sound("b_kangse",  R.raw.b_kangse,  R.drawable.ic_b_kangse,  "颂钵 · Kangse",  "頌缽 · Kangse",  "Singing Bowl · Kangse"),
@@ -34,8 +37,7 @@ object SoundCatalog {
         Sound("b_shurong", R.raw.b_shurong, R.drawable.ic_b_shurong, "颂钵 · Shurong", "頌缽 · Shurong", "Singing Bowl · Shurong"),
         Sound("b_zhada",   R.raw.b_zhada,   R.drawable.ic_b_zhada,   "颂钵 · Zhada",   "頌缽 · Zhada",   "Singing Bowl · Zhada"),
         Sound("b_gong",    R.raw.b_gong,    R.drawable.ic_b_gong,    "寺院大锣",        "寺院大鑼",        "Temple Gong"),
-        Sound("b_wood",    R.raw.b_wood,    R.drawable.ic_b_wood,    "木鱼",            "木魚",            "Wood Block"),
-        Sound("b_silent",  R.raw.b_silent,  R.drawable.ic_no_music,  "静音",            "靜音",            "Silent")
+        Sound("b_wood",    R.raw.b_wood,    R.drawable.ic_b_wood,    "木鱼",            "木魚",            "Woodblock")
     )
 
     val ambiences = listOf(
@@ -54,6 +56,12 @@ object SoundCatalog {
         Sound("amb_stream",      R.raw.amb_stream,      R.drawable.ic_amb_stream,      "永恒溪流",   "永恆溪流",   "Eternal Stream")
     )
 
-    fun bell(id: String): Sound = bells.firstOrNull { it.id == id } ?: bells[0]
+    /** 内测期「不响铃」曾存成 b_silent；v2.19 起只留一个「无」。
+     *  不改写用户已存设置，只在查找时把老 id 认回来，避免回落成 Basu。 */
+    fun canonicalBell(id: String): String = if (id == "b_silent") "none" else id
+
+    // 未知 id（旧预设里残留的名字）仍回落到 Basu，不能因为「无」排到了首位就静音。
+    fun bell(id: String): Sound =
+        bells.firstOrNull { it.id == canonicalBell(id) } ?: bells.first { it.id == "b_basu" }
     fun ambience(id: String): Sound = ambiences.firstOrNull { it.id == id } ?: ambiences[0]
 }

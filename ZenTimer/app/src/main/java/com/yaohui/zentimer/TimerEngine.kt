@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
  * 计时状态机（进程内单例）。
  * 运行时用 elapsedRealtime / wall clock 锚点，切后台、锁屏、Activity 被回收后自动补算；
  * 前台服务 TimerService 在后台持续驱动 tick()，所以铃声不依赖界面是否活着。
- * 支持无限时长模式（durationMin = -1），此时圆环每分钟转一圈、时间正向累计。
+ * v2.23 起不再有无限时长（旧 -1 由 sanitizeDuration 归一为出厂默认）。
  * 不含统计、记录、账号、内容库、联网逻辑。
  *
  * v2.3 时序修订：
@@ -22,25 +22,46 @@ object TimerEngine {
 
     enum class Phase { IDLE, PREP, RUNNING, PAUSED, DONE }
 
+    /**
+     * 出厂默认（11-10 17:4x 用户拍板「默认值都改回来」）：静坐 15 分钟 /
+     * 准备 3 分钟 / 开始铃木鱼 ×3 / 结束铃颂钵 Kangse / 间隔铃无。
+     * 单一事实源：Ui 默认值、readSettings 回落、Preset.fromJson 回落都读这里，
+     * 不许再各写一份数字，否则「新装是 5 分钟、旧预设读出来是 10 分钟」这类偏差查不出来。
+     */
+    object Defaults {
+        const val DURATION_MIN = 15
+        /** v2.24 用户拍板「小时最多 23，不提供 24 小时及以上」：23:59 = 1439 分。 */
+        const val DURATION_MAX_MIN = 1439
+        /** 准备时间滚轮是「分 0..10 / 秒 0..59」，真实可达 10:59 = 659 秒。 */
+        const val PREP_MAX_SEC = 659
+        const val PREP_SEC = 180          // 3 分钟
+        const val START_BELL = "b_wood"   // 木鱼
+        const val INTERVAL_BELL = "none"  // 无
+        const val END_BELL = "b_kangse"   // 颂钵 · Kangse
+        const val START_TIMES = 3
+        const val AMBIENCE = "none"
+        const val INTERVAL_MIN = 0
+        const val BELL_TIMES = 1
+    }
+
     data class Ui(
         val phase: Phase = Phase.IDLE,
-        val remainingMs: Long = 10 * 60_000L,
-        val totalMs: Long = 10 * 60_000L,
+        val remainingMs: Long = Defaults.DURATION_MIN * 60_000L,
+        val totalMs: Long = Defaults.DURATION_MIN * 60_000L,
         val prepLeftMs: Long = 0L,
-        val durationMin: Int = 10,
-        val intervalMin: Int = 0,
-        val prepSec: Int = 10,
-        val startBell: String = "b_basu",
-        val intervalBell: String = "b_wood",
-        val endBell: String = "b_gong",
-        val ambience: String = "none",
-        val startTimes: Int = 1,
-        val intervalTimes: Int = 1,
-        val endTimes: Int = 1,
+        val durationMin: Int = Defaults.DURATION_MIN,
+        val intervalMin: Int = Defaults.INTERVAL_MIN,
+        val prepSec: Int = Defaults.PREP_SEC,
+        val startBell: String = Defaults.START_BELL,
+        val intervalBell: String = Defaults.INTERVAL_BELL,
+        val endBell: String = Defaults.END_BELL,
+        val ambience: String = Defaults.AMBIENCE,
+        val startTimes: Int = Defaults.START_TIMES,
+        val intervalTimes: Int = Defaults.BELL_TIMES,
+        val endTimes: Int = Defaults.BELL_TIMES,
         val catchUp: Boolean = false
     ) {
         val running: Boolean get() = phase == Phase.PREP || phase == Phase.RUNNING || phase == Phase.PAUSED
-        val infinite: Boolean get() = durationMin < 0
         val progress: Float
             get() {
                 val prepTotal = prepSec * 1000L
@@ -49,7 +70,6 @@ object TimerEngine {
                     (phase == Phase.PREP || (phase == Phase.PAUSED && prepLeftMs > 0L))
                 return when {
                     inPrep -> ((prepTotal - prepLeftMs).toFloat() / prepTotal.toFloat()).coerceIn(0f, 1f)
-                    infinite -> ((remainingMs % 60_000L).toFloat() / 60_000f).coerceIn(0f, 1f)
                     totalMs <= 0L -> 0f
                     else -> (remainingMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
                 }
@@ -63,10 +83,9 @@ object TimerEngine {
     private var endAt = 0L              // elapsedRealtime
     private var prepEndAt = 0L
     private var nextIntervalAt = 0L
-    private var startedWall = 0L        // 无限模式的 wall-clock 起点
     private var pausedLeftMs = 0L
     private var pausedFrom = Phase.RUNNING
-    /** start() 时预算的「正式计时结束时刻」（wall clock）；无限模式为 0，仅供冷启动补算用。 */
+    /** start() 时预算的「正式计时结束时刻」（wall clock），仅供冷启动补算用。 */
     private var plannedEndWall = 0L
 
     /** 一次练习的唯一编号，start() 时生成并同步落盘。 */
@@ -78,21 +97,51 @@ object TimerEngine {
         if (::app.isInitialized) return
         app = ctx.applicationContext
         Lang.init(app)
+        migrateDefaults()   // 必须在 restore() 之前：restore 会按设置值还原一轮练习
         restore()
     }
 
     // ---------- 读 / 写 ----------
 
     /**
-     * 一次性历史迁移：v2.11 内测期间曾短暂出现过 2 分钟档，最终定的是 1 / 3 分钟。
-     * 磁盘上若残留 `duration_min=2`，会出现「圆环 2:00，但时长行没有对应档位」。
-     * 归一到 3 并写回；1 和 3 都是正式档，不再需要任何构建分叉。
+     * v2.23：用户拍板「连无限计时一起删」。历史设置里残留的 -1（旧无时限）在这里
+     * 一律归一为出厂默认，绝不让它流进圆环算成负数或 0 秒。
+     * 读盘、应用预设、setter 三处都走这里，口径只定义一次。
      */
-    private fun sanitizeDuration(min: Int): Int = if (min == 2) 3 else min
+    private fun sanitizeDuration(min: Int): Int =
+        if (min < 1) Defaults.DURATION_MIN
+        else min.coerceIn(1, Defaults.DURATION_MAX_MIN)
+
+    private const val KEY_DEFAULTS_VER = "defaults_ver"
+    private const val DEFAULTS_VER = 2
+
+    /**
+     * 已装用户的一次性默认值迁移（v2.17 → v2.18 → v2.23）。
+     * 只把「仍然等于旧默认值」的项升级为新默认值，用户手动改过的一律不动；
+     * 正在计时时不迁移也不写版本号，等下一次冷启动再试，避免打断一轮练习。
+     * v2.23：出厂静坐时长 5 → 15，仍停在旧默认 5 的用户也升级；37 分这类
+     * 用户自己设过的值不受影响。
+     */
+    private fun migrateDefaults() {
+        val p = app.prefs()
+        if (p.getInt(KEY_DEFAULTS_VER, 0) >= DEFAULTS_VER) return
+        val phase = p.getString("phase", "IDLE")
+        if (phase in setOf("PREP", "RUNNING", "PAUSED")) return
+        val e = p.edit()
+        // v2.17 及以前的出厂值：10 分钟 / 准备 10 秒 / Basu / 木鱼 / 大锣 / 响 1 次
+        if (p.getInt("duration_min", -1) == 10) e.putInt("duration_min", Defaults.DURATION_MIN)
+        if (p.getInt("duration_min", -1) == 5) e.putInt("duration_min", Defaults.DURATION_MIN)
+        if (p.getInt("prep_sec", -1) == 10) e.putInt("prep_sec", Defaults.PREP_SEC)
+        if (p.getString("start_bell", null) == "b_basu") e.putString("start_bell", Defaults.START_BELL)
+        if (p.getString("interval_bell", null) == "b_wood") e.putString("interval_bell", Defaults.INTERVAL_BELL)
+        if (p.getString("end_bell", null) == "b_gong") e.putString("end_bell", Defaults.END_BELL)
+        if (p.getInt("start_times", -1) == 1) e.putInt("start_times", Defaults.START_TIMES)
+        e.putInt(KEY_DEFAULTS_VER, DEFAULTS_VER).apply()
+    }
 
     private fun readSettings(): Ui {
         val p = app.prefs()
-        val rawMin = p.getInt("duration_min", 10)
+        val rawMin = p.getInt("duration_min", Defaults.DURATION_MIN)
         val d = sanitizeDuration(rawMin)
         if (d != rawMin) p.edit().putInt("duration_min", d).apply()
         val total = if (d < 0) 0L else d * 60_000L
@@ -100,15 +149,15 @@ object TimerEngine {
             durationMin = d,
             totalMs = total,
             remainingMs = total,
-            intervalMin = p.getInt("interval_min", 0),
-            prepSec = p.getInt("prep_sec", 10),
-            startBell = p.getString("start_bell", "b_basu") ?: "b_basu",
-            intervalBell = p.getString("interval_bell", "b_wood") ?: "b_wood",
-            endBell = p.getString("end_bell", "b_gong") ?: "b_gong",
-            ambience = p.getString("ambience", "none") ?: "none",
-            startTimes = p.getInt("start_times", 1).coerceIn(1, 3),
-            intervalTimes = p.getInt("interval_times", 1).coerceIn(1, 3),
-            endTimes = p.getInt("end_times", 1).coerceIn(1, 3)
+            intervalMin = p.getInt("interval_min", Defaults.INTERVAL_MIN),
+            prepSec = p.getInt("prep_sec", Defaults.PREP_SEC),
+            startBell = p.getString("start_bell", Defaults.START_BELL) ?: Defaults.START_BELL,
+            intervalBell = p.getString("interval_bell", Defaults.INTERVAL_BELL) ?: Defaults.INTERVAL_BELL,
+            endBell = p.getString("end_bell", Defaults.END_BELL) ?: Defaults.END_BELL,
+            ambience = p.getString("ambience", Defaults.AMBIENCE) ?: Defaults.AMBIENCE,
+            startTimes = p.getInt("start_times", Defaults.START_TIMES).coerceIn(1, 3),
+            intervalTimes = p.getInt("interval_times", Defaults.BELL_TIMES).coerceIn(1, 3),
+            endTimes = p.getInt("end_times", Defaults.BELL_TIMES).coerceIn(1, 3)
         )
     }
 
@@ -131,8 +180,8 @@ object TimerEngine {
             .putInt("end_times", s.endTimes)
             .putLong("paused_left", pausedLeftMs)
             .putString("paused_from", pausedFrom.name)
-            .putLong("start_wall", if (s.infinite) startedWall else 0L)
-            .putLong("end_wall", if (s.phase == Phase.RUNNING && !s.infinite) nowWall + (endAt - nowEl) else 0L)
+            .putLong("start_wall", 0L)
+            .putLong("end_wall", if (s.phase == Phase.RUNNING) nowWall + (endAt - nowEl) else 0L)
             .putLong("prep_wall", if (s.phase == Phase.PREP) nowWall + (prepEndAt - nowEl) else 0L)
             .putLong("planned_end_wall", plannedEndWall)
             .putString("run_id", runId)
@@ -156,31 +205,19 @@ object TimerEngine {
         endBellFiredFor = p.getString("end_bell_fired_for", "") ?: ""
         when (p.getString("phase", "IDLE")) {
             "RUNNING" -> {
-                if (base.infinite) {
-                    startedWall = p.getLong("start_wall", nowWall)
-                    endAt = Long.MAX_VALUE / 4
+                val left = p.getLong("end_wall", 0L) - nowWall
+                if (left <= 0L) {
+                    // 冷启动补算：只显示「已完成」，绝不补响。
+                    // C 组真机坐实的那声「嘣」就是这个分支原来自己播的。
+                    endAt = nowEl + left
+                    _ui.value = base.copy(phase = Phase.RUNNING, remainingMs = 0L)
+                    settleIfDue(nowEl, allowBell = false)
+                } else {
+                    endAt = nowEl + left
                     nextIntervalAt = nextIntervalFrom(nowEl, base.intervalMin)
-                    _ui.value = base.copy(
-                        phase = Phase.RUNNING,
-                        remainingMs = (nowWall - startedWall).coerceAtLeast(0L)
-                    )
+                    _ui.value = base.copy(phase = Phase.RUNNING, remainingMs = left)
                     startAmbience(base.ambience)
                     TimerService.start(app)
-                } else {
-                    val left = p.getLong("end_wall", 0L) - nowWall
-                    if (left <= 0L) {
-                        // 冷启动补算：只显示「已完成」，绝不补响。
-                        // C 组真机坐实的那声「嘣」就是这个分支原来自己播的。
-                        endAt = nowEl + left
-                        _ui.value = base.copy(phase = Phase.RUNNING, remainingMs = 0L)
-                        settleIfDue(nowEl, allowBell = false)
-                    } else {
-                        endAt = nowEl + left
-                        nextIntervalAt = nextIntervalFrom(nowEl, base.intervalMin)
-                        _ui.value = base.copy(phase = Phase.RUNNING, remainingMs = left)
-                        startAmbience(base.ambience)
-                        TimerService.start(app)
-                    }
                 }
             }
             "PREP" -> {
@@ -189,17 +226,6 @@ object TimerEngine {
                 if (left > 0L) {
                     prepEndAt = nowEl + left
                     _ui.value = base.copy(phase = Phase.PREP, prepLeftMs = left, remainingMs = base.totalMs)
-                    TimerService.start(app)
-                } else if (base.infinite) {
-                    // 准备已在后台走完：从准备结束那一刻续算无限计时，不补响开始铃打扰
-                    startedWall = if (prepWall > 0L) prepWall else nowWall
-                    endAt = Long.MAX_VALUE / 4
-                    nextIntervalAt = nextIntervalFrom(nowEl, base.intervalMin)
-                    _ui.value = base.copy(
-                        phase = Phase.RUNNING,
-                        remainingMs = (nowWall - startedWall).coerceAtLeast(0L)
-                    )
-                    startAmbience(base.ambience)
                     TimerService.start(app)
                 } else {
                     val runLeft = if (plannedEndWall > 0L) plannedEndWall - nowWall else base.totalMs
@@ -223,7 +249,6 @@ object TimerEngine {
                 pausedLeftMs = p.getLong("paused_left", base.totalMs)
                 pausedFrom = runCatching { Phase.valueOf(p.getString("paused_from", "RUNNING") ?: "RUNNING") }
                     .getOrDefault(Phase.RUNNING)
-                startedWall = p.getLong("start_wall", nowWall)
                 _ui.value = base.copy(
                     phase = Phase.PAUSED,
                     remainingMs = pausedLeftMs,
@@ -261,7 +286,6 @@ object TimerEngine {
         val s = _ui.value
         val outcome = SettlementPolicy.decide(
             phase = s.phase.name,
-            infinite = s.infinite,
             endAt = endAt,
             now = now,
             runId = runId,
@@ -276,6 +300,8 @@ object TimerEngine {
                     _ui.value = s.copy(phase = Phase.DONE, remainingMs = 0L, prepLeftMs = 0L)
                     persist()
                 }
+                // 冷启动补算发现上一轮其实已了结：规则可能还留在系统里，顺手收掉。
+                DndGuard.onSittingEnd(app)
                 return true
             }
             SettlementPolicy.Outcome.SETTLE_WITH_BELL,
@@ -297,6 +323,10 @@ object TimerEngine {
                         SoundCatalog.bell(s.endBell).res, 1f, s.endTimes
                     )
                 }
+                // v2.25：顺序是有意的 —— 先让结束铃在规则仍生效时起响（方案 D1 不许自伤），
+                // 铃声已交给 MediaPlayer 后才停用规则，MediaPlayer 不受后续状态变化影响。
+                // 若在响铃前就停用，等于绕过了「免打扰下结束铃照常响」这条验收。
+                DndGuard.onSittingEnd(app)
                 // 服务下一拍检测到 !running 会自行收尾，不在此强杀，避免打断结束铃。
                 return true
             }
@@ -335,9 +365,10 @@ object TimerEngine {
 
     fun setDuration(min: Int) {
         if (_ui.value.running) return
-        val total = if (min < 0) 0L else min * 60_000L
+        val v = sanitizeDuration(min)
+        val total = v * 60_000L
         _ui.value = _ui.value.copy(
-            durationMin = min, totalMs = total, remainingMs = total,
+            durationMin = v, totalMs = total, remainingMs = total,
             phase = Phase.IDLE, catchUp = false
         )
         persist()
@@ -345,13 +376,13 @@ object TimerEngine {
 
     fun setInterval(min: Int) {
         if (_ui.value.running) return
-        _ui.value = _ui.value.copy(intervalMin = min)
+        _ui.value = _ui.value.copy(intervalMin = min.coerceIn(0, 120))
         persist()
     }
 
     fun setPrep(sec: Int) {
         if (_ui.value.running) return
-        _ui.value = _ui.value.copy(prepSec = sec)
+        _ui.value = _ui.value.copy(prepSec = sec.coerceIn(0, Defaults.PREP_MAX_SEC))
         persist()
     }
 
@@ -407,10 +438,9 @@ object TimerEngine {
     /** 应用预设；练习进行中拒绝切换，避免圆环和铃声配置中途打架。 */
     fun applyPreset(p: Preset): Boolean {
         if (_ui.value.running) return false
-        // 内测期保存的预设可能带已废弃的 2 分钟档，应用时同样归一，
-        // 否则又会出现「圆环 2:00，但时长行没有对应档位」。
+        // 老预设里可能带越界值，统一钳到 1..DURATION_MAX_MIN；任意值本身合法，不再按档位归一。
         val min = sanitizeDuration(p.durationMin)
-        val total = if (min < 0) 0L else min * 60_000L
+        val total = min * 60_000L
         _ui.value = _ui.value.copy(
             phase = Phase.IDLE, catchUp = false,
             durationMin = min, totalMs = total, remainingMs = total,
@@ -445,7 +475,7 @@ object TimerEngine {
             .putBoolean("catch_up", false)
             .commit()
         val s0 = _ui.value
-        val total = if (s0.infinite) 0L else s0.durationMin * 60_000L
+        val total = s0.durationMin * 60_000L
         // 完成态（DONE）的 totalMs / remainingMs 属于「上一次练习」，圆环还停在 0:00。
         // 在这里一次性把时长写回，让 plannedEndWall、beginRunning() 的 endAt、
         // 圆环进度三者只认同一个 total；点「再来一次」也不会残留 0:00 的那一拍。
@@ -455,10 +485,13 @@ object TimerEngine {
         val now = SystemClock.elapsedRealtime()
         val nowWall = System.currentTimeMillis()
         val prepMs = if (s.prepSec > 0) s.prepSec * 1000L else 0L
-        plannedEndWall = if (s.infinite) 0L else nowWall + prepMs + total
+        plannedEndWall = nowWall + prepMs + total
         // 准备阶段只放背景音；开始铃移到 beginRunning()，准备结束那一刻才响
         startAmbience(s.ambience)
         TimerService.start(app)
+        // v2.25：起跑即激活自有勿扰规则，并把含准备时间的预计结束时刻交给兜底闹钟。
+        // 全程 runCatching，无权限 / OEM 拦截 / 规则创建失败都只记日志，静坐照常走。
+        DndGuard.onSittingStart(app, plannedEndWall)
         if (prepMs > 0L) {
             prepEndAt = now + prepMs
             _ui.value = s.copy(phase = Phase.PREP, prepLeftMs = prepMs)
@@ -473,29 +506,18 @@ object TimerEngine {
         val now = SystemClock.elapsedRealtime()
         BellPlayer.play(app, SoundCatalog.bell(s.startBell).res, 0.7f, s.startTimes)
         nextIntervalAt = nextIntervalFrom(now, s.intervalMin)
-        if (s.infinite) {
-            startedWall = System.currentTimeMillis()
-            endAt = Long.MAX_VALUE / 4
-            _ui.value = s.copy(
-                phase = Phase.RUNNING, totalMs = 0L,
-                remainingMs = 0L, prepLeftMs = 0L, catchUp = false
-            )
-        } else {
-            endAt = now + s.totalMs
-            _ui.value = s.copy(
-                phase = Phase.RUNNING, remainingMs = s.totalMs,
-                prepLeftMs = 0L, catchUp = false
-            )
-        }
+        endAt = now + s.totalMs
+        _ui.value = s.copy(
+            phase = Phase.RUNNING, remainingMs = s.totalMs,
+            prepLeftMs = 0L, catchUp = false
+        )
         persist()
     }
 
     fun pause() {
         val s = _ui.value
         if (s.phase == Phase.RUNNING) {
-            pausedLeftMs = if (s.infinite)
-                (System.currentTimeMillis() - startedWall).coerceAtLeast(0L)
-            else (endAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            pausedLeftMs = (endAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
             pausedFrom = Phase.RUNNING
         } else if (s.phase == Phase.PREP) {
             pausedLeftMs = (prepEndAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
@@ -512,7 +534,7 @@ object TimerEngine {
     fun resume() {
         val s = _ui.value
         if (s.phase != Phase.PAUSED) return
-        if (pausedLeftMs <= 0L && !s.infinite) {
+        if (pausedLeftMs <= 0L) {
             // v2.3：以前这里调 start()，会重新走一遍准备并再响一次开始铃；直接收尾才对。
             // 现在收尾同样只走唯一结算入口，不再另开一个 finish()。
             val due = SystemClock.elapsedRealtime()
@@ -526,11 +548,6 @@ object TimerEngine {
         if (pausedFrom == Phase.PREP) {
             prepEndAt = now + pausedLeftMs
             _ui.value = s.copy(phase = Phase.PREP, prepLeftMs = pausedLeftMs, remainingMs = s.totalMs)
-        } else if (s.infinite) {
-            startedWall = System.currentTimeMillis() - pausedLeftMs
-            endAt = Long.MAX_VALUE / 4
-            nextIntervalAt = nextIntervalFrom(now, s.intervalMin)
-            _ui.value = s.copy(phase = Phase.RUNNING, remainingMs = pausedLeftMs, prepLeftMs = 0L)
         } else {
             endAt = now + pausedLeftMs
             nextIntervalAt = nextIntervalFrom(now, s.intervalMin)
@@ -544,8 +561,10 @@ object TimerEngine {
         BellPlayer.release()
         AmbiencePlayer.stop()
         TimerService.stop(app)
+        // v2.25：提前「结束」与正常结算共用同一个停用入口，两条路径都不留残留规则。
+        DndGuard.onSittingEnd(app)
         val s = _ui.value
-        val total = if (s.infinite) 0L else s.durationMin * 60_000L
+        val total = s.durationMin * 60_000L
         _ui.value = s.copy(
             phase = Phase.IDLE, remainingMs = total,
             totalMs = total, prepLeftMs = 0L, catchUp = false
@@ -567,13 +586,6 @@ object TimerEngine {
                 else _ui.value = s.copy(prepLeftMs = left, remainingMs = s.totalMs)
             }
             Phase.RUNNING -> {
-                if (s.infinite) {
-                    fireIntervals(now, s.intervalMin, s.intervalBell, s.intervalTimes)
-                    _ui.value = s.copy(
-                        remainingMs = (System.currentTimeMillis() - startedWall).coerceAtLeast(0L)
-                    )
-                    return
-                }
                 // 到点只由唯一结算入口判定；服务心跳是唯一允许发声的调用方。
                 if (settleIfDue(now, allowBell = true)) return
                 val left = (endAt - now).coerceAtLeast(0L)
@@ -584,11 +596,18 @@ object TimerEngine {
         }
     }
 
+    /**
+     * v2.24：时长放宽到 23:59 后，原来的「分钟:秒」会把 23 小时显示成 `1439:00`。
+     * 圆环、顶栏胶囊、通知正文、通知历史全都走这里，口径只改这一处：
+     * 满 1 小时显示 `H:MM:SS`，不满 1 小时仍显示 `M:SS`（15:00 不变）。
+     */
     fun formatTime(ms: Long): String {
         val totalSec = (ms + 999L) / 1000L
-        val m = totalSec / 60L
+        val h = totalSec / 3600L
+        val m = (totalSec % 3600L) / 60L
         val sec = totalSec % 60L
-        return "%d:%02d".format(m, sec)
+        return if (h > 0L) "%d:%02d:%02d".format(h, m, sec)
+        else "%d:%02d".format(m, sec)
     }
 
     fun releaseAudio() {

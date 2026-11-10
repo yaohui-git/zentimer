@@ -1,7 +1,7 @@
 # 隐私政策 / Privacy Policy
 
-**生效日期 / Effective date:** 2026-11-08
-**适用 / Applies to:** 静息 · zentimer（一款极简禅意冥想计时器 / A minimal Zen meditation timer，`com.yaohui.zentimer`），Android 版 · v2.3
+**生效日期 / Effective date:** 2026-11-11
+**适用 / Applies to:** 静息 · zentimer（一款极简禅意静坐计时器 / A minimal Zen sitting timer，`com.yaohui.zentimer`），Android 版 · v2.25
 
 ---
 
@@ -15,12 +15,16 @@
 | 权限 | 用途 | 是否必需 |
 | --- | --- | --- |
 | `FOREGROUND_SERVICE` | 计时期间保持前台服务运行，让铃声在锁屏、切后台时准点响起 | 是（计时功能本身） |
-| `FOREGROUND_SERVICE_SPECIAL_USE` | Android 14+ 声明前台服务类型为「冥想计时播放」 | 是（系统要求） |
+| `FOREGROUND_SERVICE_SPECIAL_USE` | Android 14+ 声明前台服务类型为「静坐计时播放」 | 是（系统要求） |
 | `POST_NOTIFICATIONS` | 显示一条常驻的计时进度通知 | 否；拒绝后计时与铃声仍正常，仅通知不显示 |
+| `WAKE_LOCK` | 计时期间保持 CPU 唤醒，避免息屏后不响铃 | 是（普通权限，安装即授予） |
+| `POST_PROMOTED_NOTIFICATIONS` | Android 16+ 状态栏倒计时与锁屏实时信息 | 是（系统要求，不声明会被静默忽略） |
+| `ACCESS_NOTIFICATION_POLICY` | v2.25「静坐时免打扰」：创建并停用**属于本应用的一条**系统勿扰模式 | **否，且开关默认关闭**；只有用户主动打开时才需在系统「勿扰权限」页亲手授权一次 |
+| `RECEIVE_BOOT_COMPLETED` | 手机重启后收干净上一条规则的残留激活状态 | 是（复原底线，不打开应用也生效） |
 
 应用 **没有** `INTERNET` 权限，因此技术上无法把任何数据发送到网络。也没有位置、通讯录、相机、麦克风、短信、存储读写、健康数据、广告 ID、内购或账号权限。
 
-**应用从不主动发起任何运行时权限请求**：代码里没有 `requestPermissions` 调用，不会向用户弹出网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框，连上表中的通知权限也不会弹框。上表三条权限只是清单声明，用于前台保活；忽略或拒绝不影响计时与铃声。
+**应用不弹运行时权限对话框**：代码里没有 `requestPermissions` 调用，不会向用户弹出网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框，连上表中的通知权限也不会弹框。上表前五项只是清单声明、安装即授予；忽略或拒绝不影响计时与铃声。**唯一需要用户亲手授权一次的是「静坐时免打扰」**：它是系统的「特殊访问权限」，不是弹框授权，只在用户主动打开该开关时才跳一次系统设置页；不授权时该开关弹回关闭，静坐照常进行。本应用**不读取通知内容、不改动系统全局勿扰开关、不改写用户已有的勿扰规则**，只激活与停用自己那条名为「静坐」的模式；结束、进程重启、手机重启与兜底闹钟都会把它停用。
 
 清单里的 `<queries>` 只声明「本应用需要看见系统里是否安装了邮件、浏览器、微信客户端」，属于 Android 11+ 的包可见性声明，**不是权限**，不授予任何设备能力。
 
@@ -28,7 +32,8 @@
 以下数据只写入本应用的私有 `SharedPreferences`，不备份到云端、不共享给其他应用、不用于分析：
 
 - 语言偏好（简体 / 繁体 / English）与「是否手动选择过语言」的标记（用于默认跟随系统）
-- 主题色偏好（跟随系统 / 深色 / 浅色）
+- 主题色偏好（跟随系统 / 深色 / 浅色）与「随节气微调」开关（只影响纸色，不记录日期或位置）
+- 「静坐时免打扰」开关，以及系统侧那条自有规则的 ID 与当前激活标记（仅用于结束时停用；不含通知内容、不含联系人）
 - 时长、准备时间、间隔铃、三种铃声、背景音、响铃次数
 - 用户保存的预设组合（名称与上述设置值）
 - 最近应用的一套预设 ID（仅用于在预设面板里高亮「已选」，不含任何个人内容）
@@ -61,10 +66,14 @@
 | `FOREGROUND_SERVICE` | Keep the timer running so bells ring on time while the screen is locked or the app is in the background | Yes |
 | `FOREGROUND_SERVICE_SPECIAL_USE` | Android 14+ declaration of the foreground service subtype | Yes (system requirement) |
 | `POST_NOTIFICATIONS` | Show one ongoing notification with the remaining time | No — declining hides the notification only; timing and bells still work |
+| `WAKE_LOCK` | Keep the CPU awake while timing so bells ring on time after the screen turns off | Yes (normal permission, granted at install) |
+| `POST_PROMOTED_NOTIFICATIONS` | Android 16+ status-bar countdown and lock-screen live info | Yes (system requirement; without it the request is silently ignored) |
+| `ACCESS_NOTIFICATION_POLICY` | v2.25 "Do not disturb while sitting": activate and deactivate **one system mode owned by this app** | **No, and the switch is off by default**; needs one manual grant in system settings only if the user turns it on |
+| `RECEIVE_BOOT_COMPLETED` | After a reboot, clear any leftover active state of that one rule | Yes (recovery guarantee, works without opening the app) |
 
 The app has **no `INTERNET` permission**, so it technically cannot transmit data. It also has no location, contacts, camera, microphone, SMS, external storage, health, advertising ID, billing, or account permissions.
 
-**The app never requests any runtime permission**: there is no `requestPermissions` call, so no prompt for network, location, contacts, camera, microphone, storage, account or sign-in — not even for the notification permission listed above. Those three manifest entries exist only to keep the foreground service alive; ignoring them affects nothing but the notification.
+**The app shows no runtime permission dialog**: there is no `requestPermissions` call, so no prompt for network, location, contacts, camera, microphone, storage, account or sign-in — not even for the notification permission listed above. The first five manifest entries are granted at install; ignoring them affects nothing but the notification. **The one manual grant is for "Do not disturb while sitting"**: it is a special-access permission handled in system settings, not a permission dialog, and is reached only if the user turns the switch on. Without that grant the switch returns to off and the sitting continues. The app **does not read notification content, does not change the device-wide Do Not Disturb state, and does not modify any of the user's existing rules** — it only activates and deactivates its own mode named "Sitting"; ending the sitting, a cold start, a reboot and a fallback alarm all deactivate it.
 
 The `<queries>` entries in the manifest only declare package visibility (mail, browser, WeChat) on Android 11+. They are **not permissions** and grant no device capabilities.
 
@@ -72,7 +81,8 @@ The `<queries>` entries in the manifest only declare package visibility (mail, b
 Only these values are stored in the app's private `SharedPreferences`, never synced or shared:
 
 - Language preference (Simplified / Traditional Chinese / English) and a flag indicating whether the user chose it manually (used for the follow-system default)
-- Theme preference (system / dark / light)
+- Theme preference (system / dark / light) and the "Seasonal paper tone" switch (affects paper color only; no date or location is recorded)
+- The "Do not disturb while sitting" switch, plus the ID and active flag of that one system rule (used only to deactivate it; no notification content, no contacts)
 - Duration, preparation time, interval, the three bell choices, ambient sound, ring counts
 - Saved presets (name + the settings above)
 - The ID of the most recently applied preset (only to highlight it in the preset sheet; contains no personal content)

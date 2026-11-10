@@ -26,14 +26,13 @@ object SettlementPolicy {
 
     fun decide(
         phase: String,
-        infinite: Boolean,
         endAt: Long,
         now: Long,
         runId: String,
         firedFor: String,
         allowBell: Boolean
     ): Outcome {
-        if (phase != "RUNNING" || infinite) return Outcome.NONE
+        if (phase != "RUNNING") return Outcome.NONE
         if (endAt > now) return Outcome.NONE
         if (runId.isNotEmpty() && firedFor == runId) return Outcome.ALREADY_SETTLED
         return if (allowBell) Outcome.SETTLE_WITH_BELL else Outcome.SETTLE_SILENT

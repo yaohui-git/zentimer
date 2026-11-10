@@ -9,9 +9,9 @@ import android.net.Uri
 /**
  * 发布信息与联系方式的唯一配置入口。界面不写死任何一处，改这里即可。
  *
- * 打赏刻意不做内嵌支付：按用户决定改为「提示添加微信打赏」——点一下复制微信号
- * 并唤起微信，钱由用户在微信里自行转账，本应用不展示收款码、不接任何支付接口、
- * 不碰付款流程。这样既省掉了收款码素材，也避开了个人静态收款码用于经营性收款 /
+ * 支持作者刻意不做内嵌支付（2026-11-10 裁决）：关于页只留一行文字，点一下复制
+ * 纯微信号，不唤起微信、不检测微信是否安装，钱由用户在自己的微信里自行转账。
+ * 本应用不展示收款码、不接任何支付接口、不碰付款流程。这样既省掉了收款码素材，也避开了个人静态收款码用于经营性收款 /
  * 远程非面对面收款的合规问题（央行银发〔2021〕259 号）与商店「虚拟打赏」资质要求。
  * 公域调研原文见 交付说明.md「附录 · 打赏方案调研」。
  */
@@ -41,16 +41,6 @@ object AppInfo {
 
     fun mail(ctx: Context): Boolean = open(ctx, "mailto:$EMAIL")
     fun repo(ctx: Context): Boolean = if (repoIsUrl) open(ctx, REPO) else false
-
-    /** 微信没有公开的个人收款 scheme，这里只唤起微信主界面；微信号已提前复制到剪贴板。 */
-    fun openWechat(ctx: Context): Boolean = try {
-        val i = ctx.packageManager.getLaunchIntentForPackage("com.tencent.mm") ?: return false
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        ctx.startActivity(i)
-        true
-    } catch (_: Throwable) {
-        false
-    }
 
     fun copy(ctx: Context, text: String): Boolean = try {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

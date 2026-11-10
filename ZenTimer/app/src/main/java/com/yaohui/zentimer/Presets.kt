@@ -25,7 +25,7 @@ data class Preset(
 ) {
     /** 列表第二行摘要：时长 + 结束铃 + 响铃次数，一眼认出是哪一套。 */
     fun summary(): String = buildString {
-        append(Lang.minutes(durationMin))
+        append(Lang.durationLabel(durationMin))
         append(" · ")
         append(SoundCatalog.bell(endBell).name)
         append(" ").append(Lang.times(endTimes))
@@ -53,16 +53,21 @@ data class Preset(
         fun fromJson(o: JSONObject): Preset = Preset(
             id = o.optString("id"),
             name = o.optString("name"),
-            durationMin = o.optInt("durationMin", 10),
-            intervalMin = o.optInt("intervalMin", 0),
-            prepSec = o.optInt("prepSec", 10),
-            startBell = o.optString("startBell", "b_basu"),
-            intervalBell = o.optString("intervalBell", "b_wood"),
-            endBell = o.optString("endBell", "b_gong"),
-            ambience = o.optString("ambience", "none"),
-            startTimes = o.optInt("startTimes", 1).coerceIn(1, 3),
-            intervalTimes = o.optInt("intervalTimes", 1).coerceIn(1, 3),
-            endTimes = o.optInt("endTimes", 1).coerceIn(1, 3)
+            durationMin = o.optInt("durationMin", TimerEngine.Defaults.DURATION_MIN)
+                .let {
+                    if (it < 1) TimerEngine.Defaults.DURATION_MIN
+                    else it.coerceIn(1, TimerEngine.Defaults.DURATION_MAX_MIN)
+                },
+            intervalMin = o.optInt("intervalMin", TimerEngine.Defaults.INTERVAL_MIN),
+            prepSec = o.optInt("prepSec", TimerEngine.Defaults.PREP_SEC)
+                .coerceIn(0, TimerEngine.Defaults.PREP_MAX_SEC),
+            startBell = o.optString("startBell", TimerEngine.Defaults.START_BELL),
+            intervalBell = o.optString("intervalBell", TimerEngine.Defaults.INTERVAL_BELL),
+            endBell = o.optString("endBell", TimerEngine.Defaults.END_BELL),
+            ambience = o.optString("ambience", TimerEngine.Defaults.AMBIENCE),
+            startTimes = o.optInt("startTimes", TimerEngine.Defaults.START_TIMES).coerceIn(1, 3),
+            intervalTimes = o.optInt("intervalTimes", TimerEngine.Defaults.BELL_TIMES).coerceIn(1, 3),
+            endTimes = o.optInt("endTimes", TimerEngine.Defaults.BELL_TIMES).coerceIn(1, 3)
         )
     }
 }

@@ -66,8 +66,7 @@ class TimerService : Service() {
             // 仅在有焦点能力的机器上每秒重发；其它 ROM 仍由系统 chronometer 驱动 chip，
             // 保持「一秒都不重发」，不把本机的适配成本摊到所有机型。
             val focusChip = screenOn && FocusCapability.available() &&
-                (s.phase == TimerEngine.Phase.RUNNING || s.phase == TimerEngine.Phase.PREP) &&
-                !s.infinite
+                (s.phase == TimerEngine.Phase.RUNNING || s.phase == TimerEngine.Phase.PREP)
             val bucket = if (focusChip) (left / 1_000L).toString() else ""
             val key = s.phase.name + "|" + Lang.current.code + "|" + bucket +
                 if (s.phase == TimerEngine.Phase.PAUSED) "|" + TimerEngine.formatTime(left) else ""
