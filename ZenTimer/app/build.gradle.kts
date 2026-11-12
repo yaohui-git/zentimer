@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// 允许用 ZENTIMER_BUILD_DIR 环境变量把构建产物指向可写目录（沙箱兼容）。
+System.getenv("ZENTIMER_BUILD_DIR")?.let { custom ->
+    buildDir = File(custom)
+}
+
 // 自持签名：debug / release 共用同一密钥，装到手机上可直接覆盖升级。
 // 凭证只放本机 keystore.properties（不入库）；公开仓库照 keystore.properties.example 复原。
 val releaseKeystore = rootProject.file("zentimer.jks")
@@ -29,8 +34,8 @@ android {
         targetSdk = 37
         // 版本号唯一来源。改这里即可，AppInfo 通过 BuildConfig 读，界面与安装信息不会再对不上。
         // 规则：任何一次出包（哪怕只改一行代码）都要 +1 versionCode；versionName 按 主.次 递增。
-        versionCode = 26
-        versionName = "2.25"
+        versionCode = 34
+        versionName = "2.33"
     }
 
     buildFeatures {
@@ -85,6 +90,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
+    // v2.26 方案 D：折叠区高度动画用 AnimatedVisibility / expandVertically，显式声明避免靠传递依赖。
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

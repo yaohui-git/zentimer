@@ -7,7 +7,7 @@ import org.json.JSONObject
 /**
  * 预设：把「时长 / 准备 / 间隔 / 三种铃 / 背景音 / 响铃次数」整套组合存成一个方案。
  * 只存本机 SharedPreferences，用平台自带 org.json，不引入任何第三方依赖、不联网、不上传。
- * 上限 6 个：够用，也不让界面变成配置管理器。
+ * 上限 10 个（v2.27 从 6 放宽），列表按最近应用时间倒序，常用的自动顶上去。
  */
 data class Preset(
     val id: String,
@@ -21,7 +21,9 @@ data class Preset(
     val ambience: String,
     val startTimes: Int,
     val intervalTimes: Int,
-    val endTimes: Int
+    val endTimes: Int,
+    /** v2.27 增加：上次被应用的时间戳（毫秒），列表默认按最近应用排序。0 表示旧数据无此信息。 */
+    val lastAppliedAt: Long = 0L
 ) {
     /** 列表第二行摘要：时长 + 结束铃 + 响铃次数，一眼认出是哪一套。 */
     fun summary(): String = buildString {
@@ -47,6 +49,7 @@ data class Preset(
         put("startTimes", startTimes)
         put("intervalTimes", intervalTimes)
         put("endTimes", endTimes)
+        put("lastAppliedAt", lastAppliedAt)
     }
 
     companion object {
@@ -67,22 +70,25 @@ data class Preset(
             ambience = o.optString("ambience", TimerEngine.Defaults.AMBIENCE),
             startTimes = o.optInt("startTimes", TimerEngine.Defaults.START_TIMES).coerceIn(1, 3),
             intervalTimes = o.optInt("intervalTimes", TimerEngine.Defaults.BELL_TIMES).coerceIn(1, 3),
-            endTimes = o.optInt("endTimes", TimerEngine.Defaults.BELL_TIMES).coerceIn(1, 3)
+            endTimes = o.optInt("endTimes", TimerEngine.Defaults.BELL_TIMES).coerceIn(1, 3),
+            lastAppliedAt = o.optLong("lastAppliedAt", 0L)
         )
     }
 }
 
 object PresetStore {
-    const val MAX = 6
+    const val MAX = 10
     private const val KEY = "presets_v1"
     private const val KEY_LAST = "preset_last_applied"
 
+    /** v2.27：按最近应用时间倒序，常用的自动顶上去；旧数据没有时间戳则退化为保存顺序。 */
     fun all(ctx: Context): List<Preset> = try {
         val raw = ctx.prefs().getString(KEY, null) ?: return emptyList()
         val arr = JSONArray(raw)
         (0 until arr.length()).mapNotNull { i ->
             runCatching { Preset.fromJson(arr.getJSONObject(i)) }.getOrNull()
         }.filter { it.id.isNotEmpty() }
+            .sortedWith(compareByDescending<Preset> { it.lastAppliedAt }.thenBy { it.name })
     } catch (_: Throwable) {
         emptyList()
     }
@@ -91,10 +97,12 @@ object PresetStore {
     fun save(ctx: Context, p: Preset): Boolean {
         val list = all(ctx).toMutableList()
         val idx = list.indexOfFirst { it.id == p.id }
-        if (idx >= 0) list[idx] = p
+        // 新保存的预设视为"最近用"，默认打上当前时间戳，自动顶到列表顶部
+        val fresh = if (idx >= 0) p else p.copy(lastAppliedAt = System.currentTimeMillis())
+        if (idx >= 0) list[idx] = fresh
         else {
             if (list.size >= MAX) return false
-            list.add(0, p)
+            list.add(fresh)
         }
         return try {
             ctx.prefs().edit().putString(KEY, JSONArray().apply { list.forEach { put(it.toJson()) } }.toString()).apply()
@@ -119,8 +127,18 @@ object PresetStore {
         null
     }
 
+    /** v2.27：除了记住最后 id，也把该预设的时间戳更新到当前时刻，让它排到列表顶部。 */
     fun markApplied(ctx: Context, id: String) {
-        ctx.prefs().edit().putString(KEY_LAST, id).apply()
+        val now = System.currentTimeMillis()
+        val list = all(ctx).map { if (it.id == id) it.copy(lastAppliedAt = now) else it }
+        try {
+            ctx.prefs().edit()
+                .putString(KEY_LAST, id)
+                .putString(KEY, JSONArray().apply { list.forEach { put(it.toJson()) } }.toString())
+                .apply()
+        } catch (_: Throwable) {
+            ctx.prefs().edit().putString(KEY_LAST, id).apply()
+        }
     }
 
     /** 默认名：时长 + 开始铃。用户可在保存对话框里改。 */

@@ -20,7 +20,11 @@ from check_evidence_invariants import run as run_evidence_invariants
 
 REPORT = ROOT / "UI文案检查报告.md"
 RES = ROOT / "ZenTimer" / "app" / "src" / "main" / "res"
-BANNED = ("冥想", "meditation", "Meditation", "meditating", "Meditating", "mindfulness")
+# v2.33（用户 11-12 09:58 授权）：meditation 词族不再列为禁用词。
+# 11-09 那轮的「禁用词」不是长期铁律，用户原话：「之前的未必是规则，也许只是一次
+# 需求更新而已（暂时的，一次性的）」。佛光山 / 法鼓山公开英文材料用 sitting meditation，
+# 本轮英文文案按该路线统一。中文「冥想」与 mindfulness（另一个概念）仍保持原约束。
+BANNED = ("冥想", "mindfulness")
 SIMPLE_IN_HANT = set("静时铃练习准备开关连续网际资讯开启关闭声钟点后里几为与从众个门间问闻")
 # 历史台账 / 需求原话：按「结论变了别删旧版」不参与术语扫描
 HISTORY = {
@@ -238,16 +242,20 @@ def check_support_author():
         "整行复制 pingyishufang，无前缀" if pure and not prefixed
         else f"copy 命中={pure}；带前缀={prefixed}")
 
-    # ③ 下一步写死、「不解锁任何功能」三语都留着
+    # ③ v2.27 口径（用户 11-11 定）：关于页恢复 v2.25 的打赏说法，三语正文都要带
+    #    「完全自愿」的免责句；v2.26 那套「捐助 / Donate」措辞必须清零，避免两套并存。
     hints = re.findall(r'"donate_hint" to "([^"]+)"', lang)
-    notes = re.findall(r'"donate_note" to "([^"]+)"', lang)
+    bodies = re.findall(r'"donate_body" to "([^"]+)"', lang)
     ok_hint = len(hints) == 3 and all("+" in h for h in hints)
-    ok_note = len(notes) == 3 and all(
-        ("不解锁" in n or "解鎖" in n or "unlocks nothing" in n) for n in notes)
+    ok_body = len(bodies) == 3 and all(
+        ("完全自愿" in b or "完全自願" in b or "entirely optional" in b.lower())
+        for b in bodies)
+    legacy = [w for w in ("捐助", "Donate") if w in lang]
     add("PASS" if ok_hint else "FAIL", "支持作者 · 下一步三语写死",
         f"{len(hints)} 语：{' / '.join(hints)}")
-    add("PASS" if ok_note else "FAIL", "支持作者 · 不解锁任何功能",
-        f"{len(notes)} 语均保留合规句" if ok_note else f"仅 {len(notes)} 语命中")
+    add("PASS" if ok_body and not legacy else "FAIL", "打赏 · 免责句三语齐备、旧说法清零",
+        f"{len(bodies)} 语均含免责句" if ok_body and not legacy
+        else f"免责句 {len(bodies)} 语；残留旧说法={legacy}")
 
 
 def check_duration_field():
@@ -265,21 +273,60 @@ def check_duration_field():
     field = java.get("DurationField.kt", "")
     lang = java.get("Lang.kt", "")
 
-    # ① 标题层必须读得出「打赏」，且打赏区是带边框的卡片（一类缺陷的闸门）
+    # ① v2.27 口径（用户 11-11 定）：三语标题回到「打赏作者 / 贊助作者 / Tip the author」，
+    #    捐助区仍是带边框的区域框，布局不许因为改文案而散架
     titles = re.findall(r'"donate_title" to "([^"]+)"', lang)
     readable = len(titles) == 3 and all(
-        any(k in t for k in ("打赏", "贊助", "Tip")) for t in titles)
+        any(k in t for k in ("打赏", "贊助", "Tip the author")) for t in titles)
     pos = main.find('Lang.t("donate_title")')
     carded = pos >= 0 and "Card(" in main[max(0, pos - 900):pos]
     add("PASS" if readable and carded else "FAIL", "打赏 · 标题一眼看懂 + 区域框",
         f"三语标题 {' / '.join(titles)}；带边框卡片={carded}")
 
     # ② 一个组件三处复用，旧固定档位控件零残留
+    #    v2.31：三处 = 提醒间隔 / 准备时间 / 圆环下沿的临时编辑层。静坐时长那行已从
+    #    设置卡移除；提示回到圆环内常驻，档位层由 AnimatedVisibility 控制、只在编辑时
+    #    出现，展开时下方整体让位（不再是 2.30 那块常驻「零位移」槽位）。
     defs = field.count("fun DurationSetting(")
     calls = len(re.findall(r"\bDurationSetting\(", main))
     no_old = "OptionRow(" not in allkt
-    add("PASS" if defs == 1 and calls == 3 and no_old else "FAIL", "时长 · 一组件三处复用",
-        f"定义 {defs} 处 / 调用 {calls} 处 / 旧档位残留={not no_old}")
+    layer_only = ("DurationEditLayer(" in main
+                  and "AnimatedVisibility(" in main
+                  and "chrome = false" in main
+                  and "DurationFootSlot(" not in main
+                  and 'onEditingChange("duration", it)' not in main)
+    hint_in_ring = ('Lang.t("hint_tap_ring")' in main
+                    and "if (hint.isNotEmpty()) {" in main
+                    and 'if (hint.isNotEmpty() && s.phase != TimerEngine.Phase.IDLE)' not in main)
+    add("PASS" if defs == 1 and calls == 3 and no_old and layer_only and hint_in_ring else "FAIL",
+        "时长 · 一组件三处复用 / 提示回圈内 / 档位只在编辑层",
+        f"定义 {defs} 处 / 调用 {calls} 处 / 旧档位残留={not no_old} / 编辑层唯一入口={layer_only} / 提示在圈内={hint_in_ring}")
+
+    # --- v2.33 视觉可供性三条硬断言（真机取证见 design/视觉可供性审计-2026-11-12.md） ---
+    # ① 关了手势的铃声弹层不许再画 drag handle：M3 默认会画粗横线并给读屏报
+    #    「拖动手柄」，10X 实测下滑 1100px 弹层纹丝不动 —— 视觉与无障碍双重误导。
+    gi = main.find("sheetGesturesEnabled = false")
+    near = main[max(0, gi - 200): gi + 400] if gi >= 0 else ""
+    no_fake_handle = (gi >= 0 and "dragHandle = { }" in near
+                      and main.count("dragHandle = { }") == 1)
+    add("PASS" if no_fake_handle else "FAIL",
+        "铃声弹层 · 关手势就撤掉假拖动手柄",
+        f"手势关闭={gi >= 0}；同一弹层内空 handle={no_fake_handle}")
+
+    # ② 档位层展开后圆环已变成 toggle，圈内提示不能还说「轻触改时长」。
+    hint_close = ('Lang.t("hint_tap_ring_close")' in main
+                  and "editing && s.phase == TimerEngine.Phase.IDLE" in main)
+    add("PASS" if hint_close else "FAIL",
+        "圆环 · 编辑态提示与 toggle 动作一致",
+        f"编辑态改说收回={hint_close}")
+
+    # ③ 三行设置卡贴左：旧版为对齐展开态图标列留的 50dp 空位，在默认收起态
+    #    只是一块怪异留白。展开态由子行图标形成缩进层级，不再强行七行同竖线。
+    no_50 = ("Spacer(Modifier.width(50.dp))" not in main
+             and "Spacer(Modifier.width(50.dp))" not in field)
+    add("PASS" if no_50 else "FAIL",
+        "设置卡 · 三行贴左，收起态不留空图标列",
+        f"主屏/时长组件均无 50dp 占位={no_50}")
 
     # ③ 系统形态的「必须不出现」 + v2.22 反转后的「必须出现」
     # v2.21 这里断言「不许出现 NumberPicker / AndroidView」。11-10 用户实测手感后重新
@@ -340,12 +387,14 @@ def check_duration_field():
     no_oversize = all(int(n) <= 15 for n in field_fonts)
     aligned = "fontSize = 15.sp" in field_code and "fontSize = 12.sp" in field_code
     no_mono = "FontFamily.Monospace" not in field_code
-    # 铃声行左侧是 38dp 图标 + 12dp 间距；时长行留同样的 50dp 空位，七行标签同竖线。
-    same_left = field_code.count("Spacer(Modifier.width(50.dp))") == 2
-    add("PASS" if no_oversize and aligned and no_mono and same_left else "FAIL",
-        "时长 · 对齐 SettingRow 字号阶梯与左边界",
+    # v2.33 反转：旧版为对齐展开态图标列留 50dp 空位，默认收起态只剩一块怪异留白
+    # （用户 10:03 反馈）。现三行统一贴左，展开态由子行图标形成缩进层级。
+    # 字号阶梯/15-12sp/禁等宽大数字三条仍是硬约束，一条没松。
+    left_flush = field_code.count("Spacer(Modifier.width(50.dp))") == 0
+    add("PASS" if no_oversize and aligned and no_mono and left_flush else "FAIL",
+        "时长 · 字号阶梯与三行贴左",
         f"字号={sorted(set(field_fonts))}；15/12sp 齐备={aligned}；"
-        f"等宽大数字清零={no_mono}；同竖线={same_left}")
+        f"等宽大数字清零={no_mono}；三行贴左={left_flush}")
 
     # ④ 就地编辑 + 取消/返回回滚 + 只有「确定」写回
     # v2.24：写回统一走 commit()（固定档即点即写、自定义走确定），但只有这两个
@@ -374,12 +423,22 @@ def check_duration_field():
         f"源码无无限态={no_infinite}；旧 -1 归一到出厂={legacy_safe}")
 
     # ⑧ 圆环点击改为展开静坐时长，但计时中仍走暂停/继续、沉浸式全屏不受影响。
-    ring_edit = "onEditDuration" in main_code and 'onEditDuration = { editingTarget = "duration" }' in main_code
+    #    v2.32：再点圆环即收回档位。写法从单行赋值变成 toggle，断言同步改认
+    #    「入口 + 展开分支 + 收起分支 + 成对清 wheelShowing」，比旧串匹配更严：
+    #    收起时不清子状态，下一次展开会直接跳到 252dp 滚轮层（已取证的真问题）。
+    ring_anchor = main_code.find("onEditDuration = {")
+    ring_block = main_code[ring_anchor:ring_anchor + 900] if ring_anchor >= 0 else ""
+    ring_edit = ("onEditDuration" in main_code
+                 and ring_anchor >= 0
+                 and 'editingTarget == "duration"' in ring_block
+                 and 'editingTarget = "duration"' in ring_block
+                 and "editingTarget = null" in ring_block
+                 and "wheelShowing = false" in ring_block)
     ring_running = "TimerEngine.mainAction()" in main_code
     hint_ok = all(v in lang for v in ("轻触圆环改时长", "輕觸圓環改時長", "Tap the ring to set the time"))
     add("PASS" if ring_edit and ring_running and hint_ok else "FAIL",
-        "圆环 · 静止态改时长 / 计时中仍是主动作",
-        f"圆环接编辑={ring_edit}；计时中主动作保留={ring_running}；三语提示同步={hint_ok}")
+        "圆环 · 静止态改时长 / 再点收回 / 计时中仍是主动作",
+        f"圆环接编辑与收回={ring_edit}；计时中主动作保留={ring_running}；三语提示同步={hint_ok}")
 
     # ⑥ 一次性提示确实会消失，且提示文案只在一处、不常驻
     hint = "KEY_DURATION_HINT" in field and "putBoolean(KEY_DURATION_HINT, true)" in field
@@ -540,7 +599,7 @@ def check_v225_features():
     keys = ("season_fine_tune", "season_note", "season_note_running", "dnd_title",
             "dnd_sub", "dnd_denied", "dnd_unsupported", "dnd_active", "dnd_rule_name")
     three = all(lang.count(f'"{k}" to') == 3 for k in keys)
-    ok_names = names == ["静坐", "靜坐", "Sitting"]
+    ok_names = names == ["静坐", "靜坐", "Meditation"]
     add("PASS" if (three and ok_names) else "FAIL", "v2.25 · 新增文案三语齐备",
         f"{len(keys)} 组 × 3 语={three}；规则名 {' / '.join(names) if names else '缺失'}")
 
@@ -552,6 +611,35 @@ def check_v225_features():
     avail = "Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q" in dnd
     add("PASS" if (off and auth and avail) else "FAIL", "v2.25 · 默认关闭与授权闭环",
         f"默认关={off}；系统授权页+现读权限={auth}；API 29 守卫={avail}")
+
+
+def check_v229_scroll():
+    """D03 必须事件驱动，禁止回退到「猜帧数」。
+
+    TRAE v2.28 用 while + withFrameNanos 等测量 / 等 maxValue，帧数在
+    30 / 60 / 120Hz 机器上代表的时间完全不同，是时序赌博；v2.29 换
+    snapshotFlow + withTimeoutOrNull。这里把不变量钉死，防回潮。
+    """
+    code = strip_comments((SRC / "MainActivity.kt").read_text(encoding="utf-8"))
+    wait_measure = "snapshotFlow { foldBottomPx to viewportBottomPx }" in code
+    wait_max = "snapshotFlow { pageScroll.maxValue }" in code
+    timeout = code.count("withTimeoutOrNull(1000L)") >= 2
+    guess_frames = re.search(
+        r"while\s*\([^)]*\)\s*\{[^}]*withFrameNanos", code, re.S)
+    pos = "positionInWindow()" in code
+    d09 = "foldHeightPx" in code and "animateScrollTo" in code
+    add("PASS" if (wait_measure and wait_max and timeout) else "FAIL",
+        "D03 · 等测量 / 等 maxValue 走 snapshotFlow + 超时",
+        f"等测量={wait_measure}；等 maxValue={wait_max}；1s 超时兜底={timeout}")
+    add("PASS" if not guess_frames else "FAIL", "D03 · 禁止 while+withFrameNanos 猜帧",
+        "已清零" if not guess_frames else "仍有忙等帧循环")
+    add("PASS" if pos else "FAIL", "D03 · 折叠区用 positionInWindow 避裁剪",
+        f"positionInWindow={pos}")
+    add("PASS" if d09 else "FAIL", "D09 · 收起按高度回退仍在",
+        f"foldHeightPx 与 animateScrollTo 均在={d09}")
+    probe = ROOT / "tools" / "probe_d03.py"
+    add("PASS" if probe.exists() else "FAIL", "D03 · 专项验收脚本在库内",
+        probe.name if probe.exists() else "缺失")
 
 
 def main():
@@ -566,6 +654,7 @@ def main():
     check_support_author()
     check_duration_field()
     check_v225_features()
+    check_v229_scroll()
 
     # 11-09 22:5x：把《证据核查》§9 E11~E14 的标杆基线接进同一道闸门。
     # 上午 AOD 冒数字就是台账写了不变量、代码没闸门，成本最低的防复发是静态断言。

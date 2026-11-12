@@ -18,6 +18,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -29,9 +35,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -43,19 +51,26 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
@@ -64,7 +79,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -236,6 +253,7 @@ private fun StillScreen() {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     // 轻量尺寸适配：列宽与抽屉按屏宽收敛；不做折叠屏铰链感知 / 双栏（复杂度高）
     val cfg = LocalConfiguration.current
+    val density = LocalDensity.current
     val drawerWidth = minOf(300, (cfg.screenWidthDp * 0.84f).toInt()).dp
 
     var screen by remember { mutableStateOf<Screen?>(null) }
@@ -252,6 +270,20 @@ private fun StillScreen() {
     // v2.24：编辑分两层（四档 → 自定义滚轮）。只有滚轮层才有「确定」，圆环状态行
     // 得知道当前在哪一层，否则在只有档位的界面上写「调好后点确定」是骗人。
     var wheelShowing by remember { mutableStateOf(false) }
+    // v2.26 方案 D：声音 4 行默认收起、不记忆（不落盘、也不用 rememberSaveable）。
+    // 折叠区与档位层 / 滚轮层 / 铃声弹层互斥，同一时刻只开一个。
+    var soundExpanded by remember { mutableStateOf(false) }
+    // 展开时判断「末行有没有露全」用的两处窗口坐标；只在需要时才滚。
+    var foldBottomPx by remember { mutableIntStateOf(0) }
+    var viewportBottomPx by remember { mutableIntStateOf(0) }
+    // v2.27 D09：收起前要按折叠区的实际高度回退滚动，否则内容缩短后 maxValue 变小，
+    // 滚动位置被钳回，页面会瞬间弹跳一行高（真机实测 795px）。
+    var foldHeightPx by remember { mutableIntStateOf(0) }
+    // v2.27 P0-3：状态切换后 200ms 内拒收输入。折叠、开始/暂停、结束回空闲都会让布局
+    // 在下一帧整体位移，手指还没抬起就落在新位置上，表现为「点按穿透」。回空闲态先把
+    // 滚动归位再放开，避免带着计时页的滚动位置进入首页。
+    var inputLocked by remember { mutableStateOf(false) }
+    var wasRunning by remember { mutableStateOf(false) }
     // v2.23：主页面的滚动状态提到这里，是为了让「点空白取消」能分辨
     // 「用户只是想把页面滑动看清按钮」和「用户真的点了一下空白」。
     // 真机 11-10 20:1x 实测：不加这个判断时，编辑态里向上滑 480px 页面能滚，
@@ -270,6 +302,54 @@ private fun StillScreen() {
         }
     }
     KeepScreenOn(running)
+
+    // v2.26 方案 D：运行 / 暂停态卡片整体不渲染，折叠状态必须复位，
+    // 否则结束后回到空闲会莫名其妙停在上次展开的样子。
+    LaunchedEffect(running) {
+        if (running) soundExpanded = false
+    }
+    // v2.27 P0-3：输入隔离。键是 running 与 soundExpanded，任何一次切换都锁 200ms，
+    // 与折叠高度动画同长；回空闲时先 scrollTo(0) 再解锁。
+    LaunchedEffect(running, soundExpanded) {
+        inputLocked = true
+        if (wasRunning && !running) pageScroll.scrollTo(0)
+        wasRunning = running
+        delay(200L)
+        inputLocked = false
+    }
+    // 互斥：圆环或任一时长行进入编辑（走同一条 editingTarget），折叠区先收起，
+    // 保证「档位层 / 滚轮层」与折叠区同一时刻只开一个。
+    LaunchedEffect(editingTarget) {
+        if (editingTarget != null) soundExpanded = false
+    }
+    // 展开时只有末行没露全才滚，且与高度动画同一条 200ms 曲线、同起同止；
+    // 收起不主动滚动，避免「我点的那一行跑了」（定稿 D09）。
+    LaunchedEffect(soundExpanded) {
+        if (!soundExpanded) return@LaunchedEffect
+        // v2.29：v2.28 用「while + withFrameNanos 猜帧数」（6 帧等测量、24 帧等
+        // maxValue）。帧数在不同刷新率机器上代表的时间完全不同（30Hz 的 24 帧是
+        // 800ms，120Hz 只有 200ms），而且裸读 mutableIntStateOf 不订阅变化，本质是在
+        // 赌时序。D03 已经为此反复三轮没修好。改成 snapshotFlow 事件驱动：状态一变就
+        // 收到，带 1s 超时兜底，行为与刷新率无关。
+        val ready = withTimeoutOrNull(1000L) {
+            snapshotFlow { foldBottomPx to viewportBottomPx }
+                .first { (fold, view) -> fold > 0 && view > 0 }
+        } ?: return@LaunchedEffect
+        val (foldBottom, viewportBottom) = ready
+        val margin = with(density) { 24.dp.toPx() }
+        val delta = foldBottom + margin - viewportBottom
+        if (delta <= 0f) return@LaunchedEffect
+        val target = (pageScroll.value + delta).toInt()
+        // 展开动画 200ms 内内容高度还没长出来，maxValue 可能是旧值，目标会被夹回。
+        // 等它真的够得着再滚；超时就按当前 maxValue 滚到最远，不会卡住。
+        withTimeoutOrNull(1000L) {
+            snapshotFlow { pageScroll.maxValue }.first { it >= target }
+        }
+        pageScroll.animateScrollTo(
+            target.coerceIn(0, pageScroll.maxValue),
+            animationSpec = tween(200, easing = FastOutSlowInEasing)
+        )
+    }
 
     // v2.3 统一返回栈：浮层（选择器 / 保存 / 删除确认）由各自窗口自己关闭，
     // 这里只处理「抽屉 → 子页 → 主页」，主页再按一次才退出，避免误触直接退出应用。
@@ -319,6 +399,30 @@ private fun StillScreen() {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(C.bg)
+                        // v2.32：点空白取消编辑的手势改挂在这一层。原来挂在 wrapContent 的
+                        // 内层 Column 上，只盖住内容区；屏幕底部大片空白与左右 padding 之外
+                        // 都落在外层 Box，点了没反应（用户 11-12 反馈）。
+                        // 挂父层不会抢子的点击：子 clickable / verticalScroll 在 Main pass
+                        // 先消费 down，detectTapGestures 的 awaitFirstDown 默认要求未消费，
+                        // 只有真正落在空白处的落点才会判成 tap。Column 的测量高度不变，
+                        // D03 的 onGloballyPositioned 视口量法因此不受影响。
+                        .pointerInput(editingTarget) {
+                            if (editingTarget == null) return@pointerInput
+                            detectTapGestures(
+                                onPress = {
+                                    tapDownScroll = pageScroll.value
+                                    tryAwaitRelease()
+                                },
+                                onTap = {
+                                    // 按下与抬起之间页面被拖动过 = 用户想把按钮滑进视野，
+                                    // 不是要退出编辑（v2.27 实测，不加判据会误收）。
+                                    if (pageScroll.value == tapDownScroll) {
+                                        editingTarget = null
+                                        wheelShowing = false
+                                    }
+                                }
+                            )
+                        }
                 ) {
                     // 沉浸背景铺满全屏是刻意的；前景内容另由 safeDrawingPadding 避开系统栏
                     // 星空底图只在深色主题铺；浅色留一片干净的宣纸底，避免脏灰
@@ -356,30 +460,21 @@ private fun StillScreen() {
                                     .fillMaxWidth()
                                     .widthIn(max = 560.dp)
                                     .safeDrawingPadding()
+                                    // v2.27 D03：量视口必须放在 verticalScroll 之前。原先挂在后面，
+                                    // 量到的是内容底边（约 3000px），减去折叠头下沿后 delta 恒为负，
+                                    // 滚动分支从未执行，展开后末行永远露不完。
+                                    .onGloballyPositioned { coords ->
+                                        val bottom = coords.boundsInWindow().bottom.toInt()
+                                        if (bottom != viewportBottomPx) viewportBottomPx = bottom
+                                    }
                                     // v2.23：恢复整页可滚。v2.22 曾为躲开滚轮与页面抢手势而
                                     // 冻结滚动，结果展开靠下的「准备时间」时取消/确定被顶出
                                     // 屏幕且滚不动，成了死锁（用户 11-10 定性 BUG）。现在靠
                                     // 三件事同时兜住：滚轮自己 requestDisallowInterceptTouchEvent、
-                                    // 展开时 bringIntoView 把编辑区滚进视野、点空白即取消。
+                                    // 展开时 bringIntoView 把编辑区滚进视野、点空白即取消
+                                    // （v2.32 起该手势挂在外层 fillMaxSize 的 Box 上，覆盖全屏空白）。
                                     .verticalScroll(pageScroll, overscrollEffect = null)
-                                    .padding(horizontal = 20.dp, vertical = 16.dp)
-                                    // 点任意空白即取消编辑。但「按下时的滚动位置」必须等于
-                                    // 「抬起时的滚动位置」才算数：页面一旦被拖动过，这次手势
-                                    // 的目的是把取消/确定滑进视野，不是退出编辑。
-                                    .pointerInput(editingTarget) {
-                                        if (editingTarget == null) return@pointerInput
-                                        detectTapGestures(
-                                            onPress = {
-                                                tapDownScroll = pageScroll.value
-                                                tryAwaitRelease()
-                                            },
-                                            onTap = {
-                                                if (pageScroll.value == tapDownScroll) {
-                                                    editingTarget = null
-                                                }
-                                            }
-                                        )
-                                    },
+                                    .padding(horizontal = 20.dp, vertical = 16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 TopBar(
@@ -391,16 +486,76 @@ private fun StillScreen() {
                                     s,
                                     editing = editingTarget != null,
                                     wheelShowing = wheelShowing,
-                                    onEditDuration = { editingTarget = "duration" }
+                                    onEditDuration = {
+                                        // v2.32：再点圆环即收回档位（用户 11-12 反馈）。
+                                        // 收起时成对清 wheelShowing，避免自定义滚轮的子状态残留到
+                                        // 下一次展开；写法与下面 onToggleSound 的收口一致，
+                                        // 不新增状态变量、不给编辑态加生命周期分支。
+                                        if (editingTarget == "duration") {
+                                            editingTarget = null
+                                            wheelShowing = false
+                                        } else {
+                                            editingTarget = "duration"
+                                        }
+                                    },
+                                    enabled = !inputLocked
                                 )
+                                // v2.31：提示回到圆环内并常驻。档位只在编辑时从圆环下沿 8dp 长出，
+                                // 「开始静坐」与整张设置卡一起向下让位（用户 11-12 明确授权），
+                                // 展开/收起用高度动画让位移看得见；收起即复原、不占空间。
+                                AnimatedVisibility(
+                                    visible = editingTarget == "duration",
+                                    enter = expandVertically(
+                                        expandFrom = Alignment.Top,
+                                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                                    ),
+                                    exit = shrinkVertically(
+                                        shrinkTowards = Alignment.Top,
+                                        animationSpec = tween(180, easing = FastOutSlowInEasing)
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        DurationEditLayer(
+                                            s = s,
+                                            wheelShowing = wheelShowing,
+                                            enabled = !inputLocked,
+                                            onEditingChange = { on -> editingTarget = if (on) "duration" else null },
+                                            onStageChange = { wheelShowing = it }
+                                        )
+                                    }
+                                }
                                 Spacer(Modifier.height(20.dp))
                                 ActionRow(s)
-                                // v2.3 修订：预设改为顶栏书签 + 底部面板，主屏不再为它留整块区域。
-                                // 时长 / 间隔 / 准备这些每次都要调的控件回到首屏，不再被挤到折叠线以下。
+                                // v2.31：设置卡只放别处看不到的配置；静坐时长仍不在这里显示。
                                 Spacer(Modifier.height(16.dp))
                                 SettingsCard(
                                     s,
                                     editingTarget = editingTarget,
+                                    soundExpanded = soundExpanded,
+                                    onToggleSound = { next ->
+                                        if (next) {
+                                            // 互斥：展开折叠区前先取消正在编辑的时长（draft 回滚，不写回）。
+                                            editingTarget = null
+                                            wheelShowing = false
+                                        } else {
+                                            // v2.27 D09：收起前先按折叠区高度回退滚动，与高度动画
+                                            // 同起同止。不做的话 maxValue 变小、滚动被钳回，页面弹跳。
+                                            val h = foldHeightPx
+                                            if (h > 0 && pageScroll.value + h > pageScroll.maxValue) {
+                                                scope.launch {
+                                                    pageScroll.animateScrollTo(
+                                                        (pageScroll.value - h).coerceAtLeast(0),
+                                                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        soundExpanded = next
+                                    },
+                                    onFoldBottom = { foldBottomPx = it },
+                                    onFoldHeight = { foldHeightPx = it },
+                                    enabled = !inputLocked,
                                     onStageChange = { wheelShowing = it },
                                     onEditingChange = { key, on ->
                                         editingTarget = when {
@@ -411,7 +566,7 @@ private fun StillScreen() {
                                     },
                                     onPick = { picker = it }
                                 )
-                                Spacer(Modifier.height(20.dp))
+                                Spacer(Modifier.height(24.dp))
                             }
                         }
                         else -> Column(
@@ -482,7 +637,11 @@ private fun StillScreen() {
     // 浮层放在抽屉之外：Dialog / BottomSheet 都是独立窗口，不受抽屉布局影响
     val key = picker
     if (key != null) {
-        SoundPicker(key, s, onDismiss = { picker = null })
+        // v2.26 方案 D：弹层开着时折叠区保持展开；确定 / 取消 / 点外部关闭后 200ms 自动收起。
+        SoundPicker(key, s, onDismiss = {
+            picker = null
+            soundExpanded = false
+        })
     }
     if (presetSheet) {
         PresetSheet(
@@ -570,12 +729,16 @@ private fun TopBar(onMenu: () -> Unit, onPresets: () -> Unit) {
 /** 自绘书签轮廓：细线、无字、与菜单圆钮同尺寸，避免再引入一张图片资源。 */
 @Composable
 private fun BookmarkIcon(onClick: () -> Unit) {
+    // 语义块不是 Composable 上下文，名称先取好
+    val name = Lang.tx("menu_presets")
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(20.dp))
             .border(1.dp, C.stroke, RoundedCornerShape(20.dp))
-            .clickable(onClickLabel = Lang.t("preset_quick"), onClick = onClick),
+            .clickable(onClickLabel = name, onClick = onClick)
+            // v2.27：书签是自绘 Canvas，没有文字节点，必须自己报名称，否则 TalkBack 只读「按钮」。
+            .semantics { contentDescription = name },
         contentAlignment = Alignment.Center
     ) {
         // DrawScope 不是 Composable 上下文，颜色先在外面取好
@@ -609,7 +772,7 @@ private fun MenuIcon(onClick: () -> Unit, dim: Float = 1f) {
         // 图标原为深灰小图，染成暖米金才能在深色底上看见
         Image(
             painter = painterResource(R.drawable.ic_menu),
-            contentDescription = Lang.t("menu_settings"),
+            contentDescription = Lang.tx("menu"),
             colorFilter = ColorFilter.tint(C.accent),
             modifier = Modifier.size(18.dp).alpha(dim)
         )
@@ -732,7 +895,8 @@ private fun RingBlock(
     s: TimerEngine.Ui,
     editing: Boolean = false,
     wheelShowing: Boolean = false,
-    onEditDuration: (() -> Unit)? = null
+    onEditDuration: (() -> Unit)? = null,
+    enabled: Boolean = true
 ) {
     val displayMs = if (s.phase == TimerEngine.Phase.PREP || (s.phase == TimerEngine.Phase.PAUSED && s.prepLeftMs > 0L))
         s.prepLeftMs else s.remainingMs
@@ -745,31 +909,68 @@ private fun RingBlock(
     }
     val hint = when {
         s.catchUp -> Lang.t("catchup")
-        s.phase == TimerEngine.Phase.DONE ->
-            Lang.t("hint_tap_again") + " · " + Lang.durationLabel(s.durationMin)
+        // v2.33：档位层展开后，圆环的动作已从「改时长」变成 toggle 的「收回」。
+        // 圈里若仍写「轻触圆环改时长」，视觉与读屏都在说一件不会发生的事 ——
+        // 与铃声弹层那条假 drag handle 同属一类「暗示与能力不符」。行数不变，数字不跳位。
+        editing && s.phase == TimerEngine.Phase.IDLE -> Lang.t("hint_tap_ring_close")
         s.phase == TimerEngine.Phase.IDLE -> Lang.t("hint_tap_ring")
         else -> ""
     }
 
+    // v2.26：可访问名称要在修饰符里用到，先算出来；原先是写死在内容里的表达式。
+    val timeText = TimerEngine.formatTime(displayMs)
+    // v2.31：空闲态不写「准备好了，随时开始」（它只是把开始按钮又念一遍）；
+    // 提示回到圈内常驻，状态词只留给计时中 / 暂停 / 准备 / 完成这些真状态。
+    // 滚轮层的「调好后点确定」只进读屏名、不占视觉。
+    val stateText = when {
+        editing && wheelShowing && s.phase == TimerEngine.Phase.IDLE -> Lang.t("duration_editing")
+        s.phase == TimerEngine.Phase.IDLE -> ""
+        else -> Lang.t(stateKey)
+    }
+    val visualState = if (s.phase == TimerEngine.Phase.IDLE) "" else stateText
+    // v2.28：读屏名的分隔符跟着语言走。原先硬编码全角「，」，英文下 TalkBack 也会把它
+    // 当一句中文逗号念，与折叠头的半角规则不一致。
+    val ringIsEn = Lang.watch() == Lang.Mode.EN
+    val ringSep = if (ringIsEn) ", " else "，"
+    val ringLabel = buildString {
+        append(timeText)
+        if (stateText.isNotEmpty()) append(ringSep).append(stateText)
+        if (hint.isNotEmpty()) append(ringSep).append(hint)
+    }
+
+    // v2.23 用户拍板：静止态点圆环改静坐时长；计时中仍走暂停/继续。
+    // 沉浸式全屏（没有设置卡片）不传 onEditDuration，保持原来的主动作。
+    // 抽成局部变量，是因为语义树里也要挂同一个动作（见下面的 onClick）。
+    val ringAction: () -> Unit = {
+        if (onEditDuration != null &&
+            (s.phase == TimerEngine.Phase.IDLE || s.phase == TimerEngine.Phase.DONE)
+        ) onEditDuration()
+        else TimerEngine.mainAction()
+    }
+
     Box(
-        modifier = Modifier.size(ringSize()),
+        modifier = Modifier
+            .size(ringSize())
+            // v2.26 前置 P0-1：点击热区原来挂在中间那摞文字上（约 149×140dp），
+            // 圆环外圈看得见却点不动。现把 clickable 提到整块 268dp 上，并裁成圆形，
+            // 让 ripple 也只落在圆内。
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = ringAction)
+            // v2.27：一次聚焦读两遍 —— mergeDescendants 既报 contentDescription，又念内部文字，
+            // 叠加成两条。这里清空子树语义、只报一条，按钮角色与点击动作显式补回。
+            .clearAndSetSemantics {
+                role = Role.Button
+                contentDescription = ringLabel
+                onClick { ringAction(); true }
+            },
         contentAlignment = Alignment.Center
     ) {
         RingCanvas(s.progress)
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable {
-                // v2.23 用户拍板：静止态点圆环改静坐时长；计时中仍走暂停/继续。
-                // 沉浸式全屏（没有设置卡片）不传 onEditDuration，保持原来的主动作。
-                if (onEditDuration != null &&
-                    (s.phase == TimerEngine.Phase.IDLE || s.phase == TimerEngine.Phase.DONE)
-                ) onEditDuration()
-                else TimerEngine.mainAction()
-            }
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // v2.24：时长放宽到 23:59 后倒计时会变成 `23:59:00`，比 `15:00` 多三位。
             // 圆环直径恒 268dp，60sp 会撑破；只要是「时:分:秒」就降一档字号。
-            val timeText = TimerEngine.formatTime(displayMs)
             Text(
                 text = timeText,
                 color = C.text,
@@ -777,16 +978,19 @@ private fun RingBlock(
                 fontWeight = FontWeight.Light,
                 letterSpacing = 1.sp
             )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                // v2.24：只有滚轮层才有「确定」；档位层回到正常状态词，不误导。
-                text = if (editing && wheelShowing && s.phase == TimerEngine.Phase.IDLE)
-                    Lang.t("duration_editing") else Lang.t(stateKey),
-                color = C.secondary,
-                fontSize = 13.sp
-            )
+            // v2.31：提示回到圆环内、常驻不隐藏；空闲态圈内恒定「数字 + 提示」两行，
+            // 编辑态行数不变，所以数字不会跳位。状态词只在真状态出现。
+            if (visualState.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    // v2.24：只有滚轮层才有「确定」；档位层回到正常状态词，不误导。
+                    text = visualState,
+                    color = C.secondary,
+                    fontSize = 13.sp
+                )
+            }
             if (hint.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(if (visualState.isNotEmpty()) 4.dp else 12.dp))
                 Text(text = hint, color = C.accentDim, fontSize = 11.sp)
             }
             // v2.25：只在规则确实激活且正在计时时写这一行小字，结束即消失。
@@ -867,6 +1071,40 @@ private fun ringSize(): Dp {
     }
 }
 
+/**
+ * v2.31：圆环下沿的临时编辑层。只在用户点圆环改时长时出现，收起即不占空间；
+ * 「开始静坐」与设置卡在这一刻整体向下让位（用户 11-12 授权：优先保住界面美观）。
+ * 提示已回到圆环内常驻，不再由这里显示；档位 / 滚轮仍走 DurationSetting 的同一份
+ * 实现（chrome = false 变体），全 App 不生第二套控件。
+ */
+@Composable
+private fun DurationEditLayer(
+    s: TimerEngine.Ui,
+    wheelShowing: Boolean,
+    enabled: Boolean,
+    onEditingChange: (Boolean) -> Unit,
+    onStageChange: (Boolean) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(if (wheelShowing) 252.dp else 48.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        DurationSetting(
+            label = Lang.t("section_duration"),
+            value = s.durationMin,
+            mode = DurationMode.HOUR_MINUTE,
+            enabled = !s.running && enabled,
+            editing = true,
+            onEditingChange = onEditingChange,
+            onCommit = { TimerEngine.setDuration(it) },
+            onStageChange = onStageChange,
+            chrome = false
+        )
+    }
+}
+
 // ---------- 按钮 ----------
 
 @Composable
@@ -891,6 +1129,8 @@ private fun ActionRow(s: TimerEngine.Ui) {
                     .background(C.card)
                     .border(1.dp, C.stroke, RoundedCornerShape(28.dp))
                     .clickable { TimerEngine.stop() }
+                    // v2.26：整块是一个按钮，合并语义后 TalkBack 只报「结束」一次。
+                    .semantics(mergeDescendants = true) { role = Role.Button }
                     .padding(vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1044,6 +1284,11 @@ private fun PresetSheet(
 private fun SettingsCard(
     s: TimerEngine.Ui,
     editingTarget: String?,
+    soundExpanded: Boolean,
+    onToggleSound: (Boolean) -> Unit,
+    onFoldBottom: (Int) -> Unit,
+    onFoldHeight: (Int) -> Unit,
+    enabled: Boolean = true,
     onStageChange: (Boolean) -> Unit,
     onEditingChange: (String, Boolean) -> Unit,
     onPick: (String) -> Unit
@@ -1054,7 +1299,7 @@ private fun SettingsCard(
         colors = CardDefaults.cardColors(containerColor = C.elevated),
         border = BorderStroke(1.dp, C.stroke)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)) {
             // v2.3：时长 / 间隔 / 准备比挑铃声更常用，整组上移到卡片顶部，触达更近
             // v2.21：三个时长共用同一个就地滚轮组件。11-09 04:03 那条
             // 「任意时长暂缓，日后由用户重新提出才单开一轮」的触发条件已满足，本轮开启。
@@ -1065,20 +1310,10 @@ private fun SettingsCard(
             // 12dp 行内距 / 1px 细线），三行时长 + 四行铃声就是同一张设置清单，中间不再
             // 夹 spacer 和重复分隔线，节奏一致、也不再有 30sp 大数字独占一行焦点。
             DurationSetting(
-                label = Lang.t("section_duration"),
-                value = s.durationMin,
-                mode = DurationMode.HOUR_MINUTE,
-                enabled = !s.running,
-                editing = editingTarget == "duration",
-                onEditingChange = { onEditingChange("duration", it) },
-                onCommit = { TimerEngine.setDuration(it) },
-                onStageChange = onStageChange
-            )
-            DurationSetting(
                 label = Lang.t("section_interval"),
                 value = s.intervalMin,
                 mode = DurationMode.MINUTES_ONLY,
-                enabled = !s.running,
+                enabled = !s.running && enabled,
                 editing = editingTarget == "interval",
                 onEditingChange = { onEditingChange("interval", it) },
                 onCommit = { TimerEngine.setInterval(it) },
@@ -1088,7 +1323,7 @@ private fun SettingsCard(
                 label = Lang.t("section_prep"),
                 value = s.prepSec,
                 mode = DurationMode.MINUTE_SECOND,
-                enabled = !s.running,
+                enabled = !s.running && enabled,
                 editing = editingTarget == "prep",
                 onEditingChange = { onEditingChange("prep", it) },
                 onCommit = { TimerEngine.setPrep(it) },
@@ -1101,22 +1336,140 @@ private fun SettingsCard(
             val ib = SoundCatalog.bell(s.intervalBell)
             val eb = SoundCatalog.bell(s.endBell)
             val am = SoundCatalog.ambience(s.ambience)
-            SettingRow(Lang.t("label_start_bell"), sb.name, sb.icon, s.startTimes, "start") { onPick("start") }
-            SettingDivider()
-            SettingRow(Lang.t("label_interval_bell"), ib.name, ib.icon, s.intervalTimes, "interval") { onPick("interval") }
-            SettingDivider()
-            SettingRow(Lang.t("label_end_bell"), eb.name, eb.icon, s.endTimes, "end") { onPick("end") }
-            SettingDivider()
-            SettingRow(Lang.t("label_ambience"), am.name, am.icon, null, null) { onPick("ambience") }
 
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = Lang.t("settings_bell_times"),
-                color = C.accentDim,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(vertical = 6.dp)
+            // v2.26 方案 D：只折「声音」4 行。折叠头常驻，展开态 4 行原样保留，
+            // 高度与 chevron 用同一条 200ms 曲线并行跑，不滑入、不淡入、不 overshoot。
+            SoundFoldHeader(
+                expanded = soundExpanded,
+                endBell = eb,
+                endTimes = s.endTimes,
+                ambience = am,
+                onToggle = { if (enabled) onToggleSound(!soundExpanded) }
             )
+            AnimatedVisibility(
+                visible = soundExpanded,
+                enter = expandVertically(
+                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    expandFrom = Alignment.Top
+                ),
+                exit = shrinkVertically(
+                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    shrinkTowards = Alignment.Top
+                )
+            ) {
+                Column(
+                    modifier = Modifier.onGloballyPositioned { coords ->
+                        // v2.28 D03：用 positionInWindow 避开 AnimatedVisibility 的裁剪框。
+                        // boundsInWindow 会被裁剪，动画刚开始时量到的仍是折叠头下沿（约 1908），
+                        // delta 恒为负，滚动分支从不执行。
+                        // v2.29 注：滚动中 y 会变，这个值会持续上报；消费方用 snapshotFlow
+                        // 订阅，不读裸状态、也不靠固定帧数猜时机。
+                        onFoldBottom((coords.positionInWindow().y + coords.size.height).toInt())
+                        // v2.27 D09：收起时要按折叠区的实际高度回退滚动，底边坐标换不出高度。
+                        onFoldHeight(coords.size.height)
+                    }
+                ) {
+                    SettingDivider()
+                    SettingRow(Lang.t("label_start_bell"), sb.name, sb.icon, s.startTimes, "start") { if (enabled) onPick("start") }
+                    SettingDivider()
+                    SettingRow(Lang.t("label_interval_bell"), ib.name, ib.icon, s.intervalTimes, "interval") { if (enabled) onPick("interval") }
+                    SettingDivider()
+                    SettingRow(Lang.t("label_end_bell"), eb.name, eb.icon, s.endTimes, "end") { if (enabled) onPick("end") }
+                    SettingDivider()
+                    SettingRow(Lang.t("label_ambience"), am.name, am.icon, null, null) { if (enabled) onPick("ambience") }
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * v2.26 方案 D：声音 4 行的折叠头。
+ *
+ * - 整行 62dp 可点（≥48dp 硬指标），只有它有 chevron，其余 7 行保持「值 + 无箭头」。
+ * - 摘要单行，`maxLines=1` + `ellipsis`，宽度交给布局真实约束；v2.27 起不做预测量、不设 189dp 硬上限。
+ * - 语义：不 mergeDescendants，自己报「声音，颂钵 响 3 次，已收起 / 已展开」，
+ *   ×N 的视觉仍是 `×3`，TalkBack 读口语版。
+ */
+@Composable
+private fun SoundFoldHeader(
+    expanded: Boolean,
+    endBell: Sound,
+    endTimes: Int,
+    ambience: Sound,
+    onToggle: () -> Unit
+) {
+    val isEn = Lang.watch() == Lang.Mode.EN
+    val label = Lang.tx("sound_group")
+    val state = if (expanded) Lang.tx("fold_expanded") else Lang.tx("fold_collapsed")
+    val hasAmbience = ambience.id != "none"
+    val base = if (endTimes == 1) endBell.name else endBell.name + " " + Lang.times(endTimes)
+    // v2.27：英文不再预测量宽度、也不再分三级丢段，固定只显示一段（有背景音就只报背景音），
+    // 宽度交给布局的真实约束 + 省略号。中文仍两段，放不下由 ellipsis 收尾。
+    // 这样「屏上看到的那一段」与「读屏念的那一段」始终一致。
+    val summary = when {
+        isEn -> if (hasAmbience) ambience.name else base
+        hasAmbience -> "$base · ${ambience.name}"
+        else -> base
+    }
+    // 中文用全角逗号，英文用半角；两者在视觉与读屏里保持一致。
+    val sep = if (isEn) ", " else "，"
+    val spoken = if (isEn) {
+        // 英文屏上只显示一段，读屏也只报这一段；但次数用口语（"rings 3 times"），
+        // 不念 `×3`——TalkBack 会把 × 读成「times」再念数字，成了「times 3」。
+        if (hasAmbience) ambience.name
+        else if (endTimes == 1) endBell.name
+        else endBell.name + sep + Lang.timesSpoken(endTimes)
+    } else buildString {
+        append(endBell.name)
+        if (endTimes != 1) append(sep).append(Lang.timesSpoken(endTimes))
+        if (hasAmbience) append(sep).append(ambience.name)
+    }
+    val angle by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(200, easing = FastOutSlowInEasing)
+    )
+    val chevronColor = C.secondary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(62.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onToggle)
+            .clearAndSetSemantics {
+                role = Role.Button
+                // 状态词已经拼在 contentDescription 里；再加 stateDescription 会被连读两遍。
+                contentDescription = listOf(label, spoken, state).joinToString(sep)
+                onClick { onToggle(); true }
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // v2.33 · 收起态优先：原先这里留 50dp 空位，只为和展开态铃声行的
+        // 「38dp 图标 + 12dp 间距」对齐。但收起态是默认态、且没有图标，那块空白
+        // 让三行文字悬在卡片中段，显得怪异。去掉后三行贴左；展开态自动形成
+        // 「主项贴左 / 子项带图标缩进」的层级，比强行七行同一竖线更易读。
+        // 不补图标：间隔、准备都是时间概念，图形会与计时圆环语义打架，也不够克制。
+        Text(text = label, color = C.text, fontSize = 15.sp, maxLines = 1)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = summary,
+            color = C.accent,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Canvas(modifier = Modifier.size(16.dp).rotate(angle)) {
+            val w = size.width
+            val h = size.height
+            val stroke = 1.6.dp.toPx()
+            drawLine(chevronColor, Offset(w * 0.22f, h * 0.38f), Offset(w * 0.5f, h * 0.66f), stroke, StrokeCap.Round)
+            drawLine(chevronColor, Offset(w * 0.5f, h * 0.66f), Offset(w * 0.78f, h * 0.38f), stroke, StrokeCap.Round)
         }
     }
 }
@@ -1135,6 +1488,9 @@ private fun SettingRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
+            // v2.26：铃声行由图标 + 名称 + 当前值 + ×N 组成，合并成一条再读；
+            // ×N 自己是可点子节点，仍会单独出现在控件树里。
+            .semantics(mergeDescendants = true) {}
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1176,6 +1532,11 @@ private fun SettingRow(
                     .background(C.card)
                     .border(1.dp, C.stroke, RoundedCornerShape(10.dp))
                     .clickable { TimerEngine.cycleTimes(timesKey) }
+                    // v2.26：别只念「×2」。补上「响铃」这个主语，并把角色标成按钮。
+                    .clearAndSetSemantics {
+                        role = Role.Button
+                        contentDescription = "${Lang.t("preset_times")} ${Lang.times(times)}"
+                    }
                     .padding(horizontal = 8.dp, vertical = 5.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1254,6 +1615,12 @@ private fun SoundPicker(key: String, s: TimerEngine.Ui, onDismiss: () -> Unit) {
         // 关掉弹层手势后该 nestedScroll 连接不再安装（material3 1.4.0 字节码已核），
         // 滚动、惯性全部留在网格里。出口仍齐全：取消 / 确定 / 点遮罩 / 返回键。
         sheetGesturesEnabled = false,
+        // v2.33 · 视觉可供性：M3 默认会画一条粗 drag handle 并给读屏报「拖动手柄」，
+        // 但上面已关掉手势 —— 用户会不自主地下滑收起，TalkBack 也会被告知可拖动，
+        // 两者都是假的。真机取证：10X 上从 (540,262) 下滑 1100px，弹层 46 节点纹丝不动。
+        // 不重新启用手势（会把 v2.19 真机 A/B 复现过的「整卡被拽下再弹回」抖动带回来），
+        // 只撤掉这个假暗示：一行参数，不动滚动、不动状态机、四条出口一个不少。
+        dragHandle = { },
         containerColor = C.elevated,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
@@ -1768,10 +2135,6 @@ private fun SettingsPage(ctx: Context, onToast: (String) -> Unit) {
             Text(text = "\u203a", color = C.accentDim, fontSize = 20.sp)
         }
     }
-    Spacer(Modifier.height(28.dp))
-    HorizontalDivider(thickness = 1.dp, color = C.divider)
-    Spacer(Modifier.height(24.dp))
-    Text(text = Lang.t("settings_bell_times"), color = C.secondary, fontSize = 13.sp)
 }
 
 /**
@@ -1924,6 +2287,7 @@ private fun AboutPage(ctx: Context, onToast: (String) -> Unit) {
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { if (AppInfo.copy(ctx, AppInfo.WECHAT)) copiedWechat = true },
+                // v2.26：微信号 + 行尾「复制」由 clickable 自带的语义合并一次读完。
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -2029,6 +2393,8 @@ private fun RowScope.ContactCell(
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(8.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            // v2.26：名称 + 值 + 行尾「复制」合成一条，TalkBack 不再分三段念。
+            .semantics(mergeDescendants = true) {}
             .padding(vertical = 2.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

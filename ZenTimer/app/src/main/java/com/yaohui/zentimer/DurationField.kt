@@ -29,8 +29,12 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -193,7 +197,10 @@ fun DurationSetting(
     editing: Boolean,
     onEditingChange: (Boolean) -> Unit,
     onCommit: (Int) -> Unit,
-    onStageChange: (Boolean) -> Unit = {}
+    onStageChange: (Boolean) -> Unit = {},
+    // v2.30：chrome=false 是「圆环脚边槽位」变体 —— 同一份实现，但不画清单行、
+    // 不画分隔线、不请求 bringIntoView，只把档位／滚轮放进固定 48dp 的地方。
+    chrome: Boolean = true
 ) {
     val ctx = LocalContext.current
     var draft by remember { mutableIntStateOf(value) }
@@ -226,7 +233,7 @@ fun DurationSetting(
     // 这是「看不到确定和取消」的正解，不是把页面滚动关掉。
     // 切到滚轮层时 editorH 会变，effect 重跑再滚一次，按钮不会被 200dp 的滚轮顶出去。
     LaunchedEffect(editing, showWheel, editorH) {
-        if (editing && editorH > 0) {
+        if (editing && editorH > 0 && chrome) {
             delay(80)
             runCatching {
                 bringIntoView.bringIntoView(
@@ -267,7 +274,7 @@ fun DurationSetting(
     BackHandler(enabled = editing) { cancel() }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (!editing) {
+        if (!editing && chrome) {
             // 显示态：与 SettingRow 同一套字号 / 颜色 / 行距，整行可点。
             Row(
                 modifier = Modifier
@@ -285,9 +292,10 @@ fun DurationSetting(
                     .padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 铃声 SettingRow 左边有一枚 38dp 图标 + 12dp 间距。时长行没有图标，
-                // 不用硬塞一个装饰，但留同样的空位，七行标签才在同一条竖线上。
-                Spacer(Modifier.width(50.dp))
+                // v2.33 · 收起态优先：原先留 50dp 空位只为与展开态铃声行的图标列对齐，
+                // 但默认态没有图标，那块空白让三行文字悬在卡片中段。现三行统一贴左，
+                // 展开态则形成「主项贴左 / 子项带图标缩进」的层级。不改行高与分隔线，
+                // D03 的视口量法不受影响。
                 Text(
                     text = label,
                     color = C.text,
@@ -317,43 +325,52 @@ fun DurationSetting(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onSizeChanged { editorH = it.height }
-                    .bringIntoViewRequester(bringIntoView)
+                    .then(
+                        if (chrome) Modifier
+                            .onSizeChanged { editorH = it.height }
+                            .bringIntoViewRequester(bringIntoView)
+                        else Modifier
+                    )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) { cancel() }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Spacer(Modifier.width(50.dp))
-                    Text(
-                        text = label,
-                        color = C.text,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = Lang.durationSettingLabel(draft, mode),
-                        color = C.accent,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (!showWheel) {
-                    // v2.24 档位层：五个小字，选中只换颜色，不加卡片、不加边框。
-                    // 当前值不是固定档时，「自定义」这一格高亮并在下面回显当前值。
+                // v2.30：脚边槽位不画这行标签，否则 48dp 装不下、展开会把按钮往下推。
+                if (chrome) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { cancel() }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // v2.33：与显示态一起贴左，编辑态展开时标签不横向跳位。
+                        Text(
+                            text = label,
+                            color = C.text,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = Lang.durationSettingLabel(draft, mode),
+                            color = C.accent,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (!showWheel) {
+                    // v2.24 档位层：五档可选，选中只换颜色，不加卡片、不加边框。
+                    // 当前值不是固定档时，「自定义」这一格高亮并在下面回显当前值。
+                    // v2.26（用户 11-11「字体大一些，让点选更从容」）：字 13→15sp，
+                    // 上下留白 10→14dp，整格约 48dp，够到最小触摸目标；仍不加卡片与底色。
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (chrome) Modifier.padding(horizontal = 6.dp, vertical = 4.dp) else Modifier),
                         verticalAlignment = Alignment.Top
                     ) {
                         presets.forEach { choice ->
@@ -361,7 +378,11 @@ fun DurationSetting(
                             Text(
                                 text = choice.label,
                                 color = if (selected) C.accent else C.secondary,
-                                fontSize = 13.sp,
+                                fontSize = 15.sp,
+                                // v2.26：真机实测选中与未选中「同色」——部分节气里 accent 与 secondary
+                                // 太接近，只靠颜色分不出来。选中共用「强调色 + 加一档字重」，
+                                // 三语与三种系统字号下都成立，不加卡片、不加边框。
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier = Modifier
@@ -370,7 +391,12 @@ fun DurationSetting(
                                         indication = null,
                                         interactionSource = remember { MutableInteractionSource() }
                                     ) { commit(choice.value) }
-                                    .padding(vertical = 10.dp)
+                                    // v2.27：四档是单选，补上角色与选中态，TalkBack 才会念「已选中」。
+                                    .semantics {
+                                        role = Role.RadioButton
+                                        this.selected = selected
+                                    }
+                                    .padding(vertical = 14.dp)
                             )
                         }
                         Column(
@@ -384,27 +410,33 @@ fun DurationSetting(
                                     draft = startCustom()
                                     wheelRequested = true
                                 }
-                                .padding(vertical = 10.dp)
+                                .semantics(mergeDescendants = true) {
+                                    // v2.26：这一格不是纯文字按钮，TalkBack 要一次读出「自定义 + 当前值」。
+                                    contentDescription =
+                                        "${Lang.t("duration_custom")}，${Lang.durationSettingLabel(value, mode)}"
+                                }
+                                .padding(vertical = 14.dp)
                         ) {
                             Text(
                                 text = Lang.t("duration_custom"),
                                 color = if (customSelected) C.accent else C.secondary,
-                                fontSize = 13.sp,
+                                fontSize = 15.sp,
+                                fontWeight = if (customSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1
                             )
-                            if (customSelected) {
+                            if (customSelected && chrome) {
                                 Text(
                                     text = Lang.durationSettingLabel(value, mode),
                                     color = C.accentDim,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1
                                 )
                             }
                         }
                     }
-                    HorizontalDivider(thickness = 1.dp, color = C.divider)
+                    if (chrome) HorizontalDivider(thickness = 1.dp, color = C.divider)
                 } else {
                     // v2.24：每列 weight(1f) 铺满可用宽度，滚轮行内不再有空白区；
                     // 整块竖向手势都归 NumberPicker，手落空拖走整页的老毛病随之消失。
@@ -455,7 +487,7 @@ fun DurationSetting(
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     }
-                    HorizontalDivider(thickness = 1.dp, color = C.divider)
+                    if (chrome) HorizontalDivider(thickness = 1.dp, color = C.divider)
                 }
             }
         }
@@ -511,6 +543,8 @@ private fun WheelColumn(
                         )
                     }
                     value = index
+                    // v2.26：原生滚轮的可访问名称挂在 View 自己身上，TalkBack 才能随滚动读到当前值。
+                    contentDescription = "${values[index]} ${col.label}"
                     // v2.23：整页滚动已恢复，所以滚轮必须自己把手势归属说清楚——
                     // 按下时告诉父级别拦截，抬起时归还。这样滚轮区快甩不会拖走整页，
                     // 而滚轮之外的空白仍可正常滚动页面。
@@ -531,13 +565,15 @@ private fun WheelColumn(
             update = { picker ->
                 // 外部值（取消回滚、另一列联动）变了才回写；等值时不碰，避免打断正在进行的 fling。
                 if (picker.value != index) picker.value = index
+                // v2.26：当前值随滚动变化，每次都写回原生节点，控件树里不会停在初始值。
+                picker.contentDescription =
+                    "${values[picker.value.coerceIn(0, values.lastIndex)]} ${col.label}"
             },
             modifier = Modifier
                 .fillMaxWidth()
                 // 真机系统计时页每列 901px ≈ 5 行；原 120dp 只有 330px ≈ 3 行，行程短、
                 // fling 一起就到头。200dp ≈ 550px ≈ 5 行，与系统同量级。
                 .height(200.dp)
-                .semantics { contentDescription = "${col.value} ${col.label}" }
         )
         Text(text = col.label, color = C.secondary, fontSize = 11.sp)
     }

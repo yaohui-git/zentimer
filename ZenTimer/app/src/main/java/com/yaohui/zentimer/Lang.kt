@@ -279,6 +279,17 @@ object Lang {
     }
 
     fun times(n: Int): String = "×$n"
+
+    /**
+     * v2.26：折叠头摘要里的 ×N 只服务视觉，TalkBack 要读成「响 3 次」而不是「叉 三」。
+     * 口语拼装放在本文件（文案唯一事实源），不新增 key，也不让 UI 各拼一遍。
+     */
+    fun timesSpoken(n: Int): String = when (_mode.value) {
+        Mode.HANS -> "响 $n 次"
+        Mode.HANT -> "響 $n 次"
+        Mode.EN -> if (n == 1) "rings once" else "rings $n times"
+    }
+
     fun off(): String = t("off")
 
     private val HANS = mapOf(
@@ -291,7 +302,7 @@ object Lang {
         "state_done" to "本次静坐完成",
         "state_stopped" to "本次静坐已结束",
         "hint_tap_ring" to "轻触圆环改时长",
-        "hint_tap_again" to "下方按钮可再来一次",
+        "hint_tap_ring_close" to "再点圆环收起",
         "btn_start" to "开始静坐",
         "btn_again" to "再来一次",
         "btn_pause" to "暂停",
@@ -313,6 +324,7 @@ object Lang {
         "picker_ambience" to "选择背景音",
         "catchup" to "本次静坐已在后台结束，铃声未补响",
         // 菜单与三个子页
+        "menu" to "菜单",
         "menu_presets" to "预设",
         "menu_settings" to "设置",
         "menu_about" to "关于",
@@ -328,7 +340,6 @@ object Lang {
         "lang_hant" to "繁体",
         "lang_en" to "English",
         "settings_language_note" to "首次跟随系统，其他语言用 English，切换不打断静坐",
-        "settings_bell_times" to "铃声右侧的 ×N 可轻触切换响铃次数",
         "settings_notify" to "计时通知",
         "notify_on" to "通知已开启",
         "notify_off" to "通知已关闭，锁屏与状态栏都不显示倒计时",
@@ -341,7 +352,7 @@ object Lang {
         "preset_save" to "保存当前预设",
         "preset_dialog_title" to "为这个预设命名",
         "preset_name_hint" to "例如：晨间 20 分钟",
-        "preset_max" to "最多保存 6 个预设",
+        "preset_max" to "最多保存 10 个预设",
         "preset_running_block" to "静坐进行中，结束后再切换预设",
         "preset_applied" to "已应用",
         "preset_deleted" to "已删除",
@@ -374,7 +385,7 @@ object Lang {
         "state_done" to "本次靜坐完成",
         "state_stopped" to "本次靜坐已結束",
         "hint_tap_ring" to "輕觸圓環改時長",
-        "hint_tap_again" to "下方按鈕可再來一次",
+        "hint_tap_ring_close" to "再點圓環收起",
         "btn_start" to "開始靜坐",
         "btn_again" to "再來一次",
         "btn_pause" to "暫停",
@@ -395,6 +406,7 @@ object Lang {
         "picker_end" to "選擇結束鈴聲",
         "picker_ambience" to "選擇背景音",
         "catchup" to "本次靜坐已在背景結束，鈴聲未補響",
+        "menu" to "選單",
         "menu_presets" to "預設",
         "menu_settings" to "設定",
         "menu_about" to "關於",
@@ -409,7 +421,6 @@ object Lang {
         "lang_hant" to "繁體",
         "lang_en" to "English",
         "settings_language_note" to "首次跟隨系統，其他語言用 English，切換不中斷靜坐",
-        "settings_bell_times" to "鈴聲右側的 ×N 可輕觸切換響鈴次數",
         "settings_notify" to "計時通知",
         "notify_on" to "通知已開啟",
         "notify_off" to "通知已關閉，鎖定畫面與狀態列都不顯示倒數",
@@ -421,7 +432,7 @@ object Lang {
         "preset_save" to "儲存目前預設",
         "preset_dialog_title" to "為這個預設命名",
         "preset_name_hint" to "例如：晨間 20 分鐘",
-        "preset_max" to "最多儲存 6 個預設",
+        "preset_max" to "最多儲存 10 個預設",
         "preset_running_block" to "靜坐進行中，結束後再切換預設",
         "preset_applied" to "已套用",
         "preset_deleted" to "已刪除",
@@ -447,18 +458,18 @@ object Lang {
         "app_title" to "zentimer",
         "state_idle" to "Ready when you are",
         "state_prep" to "Preparing",
-        "state_running" to "Sitting",
+        "state_running" to "Meditating",
         "state_paused" to "Paused",
         "state_done" to "Session complete",
         "state_stopped" to "Session ended",
         "hint_tap_ring" to "Tap the ring to set the time",
-        "hint_tap_again" to "Use the button below to go again",
+        "hint_tap_ring_close" to "Tap the ring again to close",
         "btn_start" to "Start",
         "btn_again" to "Go again",
         "btn_pause" to "Pause",
         "btn_resume" to "Resume",
         "btn_stop" to "End",
-        "section_duration" to "Sitting time",
+        "section_duration" to "Duration",
         "section_interval" to "Interval",
         "section_prep" to "Preparation",
         "label_start_bell" to "Start bell",
@@ -467,12 +478,13 @@ object Lang {
         "label_ambience" to "Ambient sound",
         "off" to "Off",
         "cancel" to "Cancel",
-        "toast_running" to "Adjust once this sitting ends",
+        "toast_running" to "Adjust when this session ends",
         "picker_start" to "Start bell",
         "picker_interval" to "Interval bell",
         "picker_end" to "End bell",
         "picker_ambience" to "Ambient sound",
         "catchup" to "Session ended in the background; the bell was not replayed",
+        "menu" to "Menu",
         "menu_presets" to "Presets",
         "menu_settings" to "Settings",
         "menu_about" to "About",
@@ -487,7 +499,6 @@ object Lang {
         "lang_hant" to "繁體中文",
         "lang_en" to "English",
         "settings_language_note" to "System language first; others use English; switching never interrupts",
-        "settings_bell_times" to "Tap ×N beside a bell to change the ring count",
         "settings_notify" to "Timer notification",
         "notify_on" to "Notifications are on",
         "notify_off" to "Notifications are off; no countdown on lock screen or status bar",
@@ -499,14 +510,14 @@ object Lang {
         "preset_save" to "Save this preset",
         "preset_dialog_title" to "Name this preset",
         "preset_name_hint" to "e.g. Morning 20 min",
-        "preset_max" to "Up to 6 presets",
-        "preset_running_block" to "Switch presets after this sitting ends",
+        "preset_max" to "Up to 10 presets",
+        "preset_running_block" to "Switch presets after this session ends",
         "preset_applied" to "Applied",
         "preset_deleted" to "Deleted",
         "preset_saved" to "Saved",
         "preset_prep" to "Prep",
         "preset_times" to "Rings",
-        "about_tagline" to "One moment of sitting still outweighs countless seven-jewel pagodas",
+        "about_tagline" to "One moment of sitting meditation surpasses countless seven-jewel stupas",
         "about_version" to "Version",
         "about_contact" to "Contact",
         "about_repo" to "Repository",
@@ -518,13 +529,12 @@ object Lang {
         "about_privacy_body" to "No network, no data collection; settings stay on your device",
         "about_assets_body" to "Sounds and images play locally only; no online content",
         "about_offline_note" to "Tapping a row copies text or opens a system app; the text is here offline too",
-        "notif_body" to "Zen sitting · "
+        "notif_body" to "Meditation · "
     )
 
     // ---------- v2.3 新增：三张表 key 严格一一对应 ----------
-    // 支持作者（2026-11-10 v2.21 修订）：不内嵌支付、不放收款码、不唤起微信；
-    // 关于页留一张带细边框的区域框，标题直接写「打赏作者」，点微信号那行复制纯 ID；
-    // 反馈用行尾小字，不弹自定义气泡。v2.20 曾压成一行，因「一眼看不出是打赏」被推翻。
+    // 支持作者（2026-11-11 v2.27 修订）：按用户要求回到 v2.25 的打赏说法；
+    // 仍不内嵌支付、不放收款码、不唤起微信，点微信号那行只复制纯 ID。
 
     private val EXTRA_HANS = mapOf(
         "back_again" to "再按一次退出",
@@ -543,7 +553,7 @@ object Lang {
         "about_repo_pending" to "代码仓库待定",
         "copied" to "已复制",
         "action_copy" to "复制",
-        // v2.21：时长滚轮专用短单位与新人提示；打赏标题恢复，让这块区域一眼看懂是干嘛的。
+        // v2.21：时长滚轮专用短单位与新人提示；打赏标题保留，让这块区域一眼看懂是干嘛的。
         "unit_hour_short" to "时",
         "unit_min_short" to "分",
         "unit_sec_short" to "秒",
@@ -553,6 +563,8 @@ object Lang {
         "duration_editing" to "调好后点确定",
         // v2.24：四档快捷值之外的第五格，点它才展开滚轮。
         "duration_custom" to "自定义",
+        // v2.27（用户 11-11 定）：关于页整段恢复 v2.25 的打赏文案，与小米审核口径的
+        // 冲突用户已知悉并要求照办，这里不再改写、不再劝。
         "donate_title" to "打赏作者",
         "donate_body" to "若愿意，可加微信，金额随意，完全自愿",
         "donate_note" to "打赏完全自愿，不解锁任何功能，本应用不处理付款",
@@ -567,19 +579,24 @@ object Lang {
         "lang_follow_system" to "跟随系统",
         "about_custom" to "定制与合作",
         "about_custom_body" to "寺院、道观等非营利组织可优惠或免费，其他用途另议",
-        // v2.25 · 四时：不新增顶级设置项，并进「外观」组；文案里不出现季节名与节气名。
-        "season_fine_tune" to "随节气微调",
-        "season_note" to "只在下次打开时微调纸色，静坐中不改变",
-        "season_note_running" to "静坐中不改变纸色",
-        // v2.25 · 静坐时免打扰：统一说「勿扰权限」，不出现系统黑话。
+        // v2.26 文案（用户 11-11 口径）：改叫「随节气换肤」，说明写功能而不是机制；
+        // 仍不新增顶级设置项、不提供四选一、静坐中不换色。
+        "season_fine_tune" to "随节气换肤",
+        "season_note" to "随四季更替，自动更换主题色",
+        "season_note_running" to "静坐中不更换主题色",
+        // v2.26 文案（用户 11-11 口径）：说明行写用户可有的预期，不写「需一次系统授权」这类实现细节。
         "dnd_title" to "静坐时免打扰",
-        "dnd_sub" to "需一次系统授权，结束后自动停用",
+        "dnd_sub" to "静坐时不被通知与来电打断，结束后自动恢复",
         "dnd_denied" to "未获得勿扰权限，本次静坐不会屏蔽通知",
         "dnd_unsupported" to "当前系统版本不支持，开关不可用",
         "dnd_active" to "免打扰中",
         "dnd_rule_name" to "静坐",
         "switch_on" to "开",
-        "switch_off" to "关"
+        "switch_off" to "关",
+        // v2.26 方案 D：折叠头标题与两个 TalkBack 状态词。只有第一条是屏幕可见文字。
+        "sound_group" to "铃声与背景",
+        "fold_collapsed" to "已收起",
+        "fold_expanded" to "已展开"
 
     )
 
@@ -620,17 +637,20 @@ object Lang {
         "lang_follow_system" to "跟隨系統",
         "about_custom" to "客製與合作",
         "about_custom_body" to "寺院、道觀等非營利組織可優惠或免費，其他用途另議",
-        "season_fine_tune" to "隨節氣微調",
-        "season_note" to "只在下次開啟時微調紙色，靜坐中不改變",
-        "season_note_running" to "靜坐中不改變紙色",
+        "season_fine_tune" to "隨節氣換膚",
+        "season_note" to "隨四季更替，自動更換主題色",
+        "season_note_running" to "靜坐中不更換主題色",
         "dnd_title" to "靜坐時免打擾",
-        "dnd_sub" to "需一次系統授權，結束後自動停用",
+        "dnd_sub" to "靜坐時不被通知與來電打斷，結束後自動恢復",
         "dnd_denied" to "未取得勿擾權限，本次靜坐不會屏蔽通知",
         "dnd_unsupported" to "目前系統版本不支援，開關無法使用",
         "dnd_active" to "免打擾中",
         "dnd_rule_name" to "靜坐",
         "switch_on" to "開",
-        "switch_off" to "關"
+        "switch_off" to "關",
+        "sound_group" to "鈴聲與背景",
+        "fold_collapsed" to "已收起",
+        "fold_expanded" to "已展開"
 
     )
 
@@ -671,17 +691,20 @@ object Lang {
         "lang_follow_system" to "Follow system",
         "about_custom" to "Custom builds",
         "about_custom_body" to "Non-profits free or discounted; other uses quoted separately",
-        "season_fine_tune" to "Seasonal paper tone",
-        "season_note" to "Paper tone changes only at next launch, never mid-sitting",
-        "season_note_running" to "Paper tone stays put while sitting",
-        "dnd_title" to "Do not disturb while sitting",
-        "dnd_sub" to "Needs one system permission; off again when the sitting ends",
+        "season_fine_tune" to "Seasonal theme",
+        "season_note" to "Theme colors change automatically with the seasons",
+        "season_note_running" to "Theme colors stay put during meditation",
+        "dnd_title" to "Do not disturb during meditation",
+        "dnd_sub" to "Notifications and calls stay quiet; back to normal afterwards",
         "dnd_denied" to "No Do Not Disturb access; notifications stay on",
         "dnd_unsupported" to "Not available on this system version",
         "dnd_active" to "Do not disturb",
-        "dnd_rule_name" to "Sitting",
+        "dnd_rule_name" to "Meditation",
         "switch_on" to "On",
-        "switch_off" to "Off"
+        "switch_off" to "Off",
+        "sound_group" to "Bells & Background",
+        "fold_collapsed" to "Collapsed",
+        "fold_expanded" to "Expanded"
 
     )
 }

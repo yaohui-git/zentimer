@@ -13,6 +13,10 @@
 每行自带「分组 / 场景 / 来源行号 / 引用次数 / 本轮状态 / 复核标注 / 待办」，
 AI 可以直接按这张表逐条给修改意见，改完回填「建议」列即可。
 
+「本轮状态」不写死：拿当前源码和已发布基线（公开库镜像 .craft/tmp_remote）逐条比对，
+值不同才标「本轮已改」，相同标「未改（原样）」，基线缺失时标「未判定（无发布基线）」，
+不再靠一张手写的 key 白名单猜。
+
 用法：python tools/export_ui_copy.py
 """
 from __future__ import annotations
@@ -25,6 +29,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "ZenTimer" / "app" / "src" / "main" / "java" / "com" / "yaohui" / "zentimer"
 OUT = ROOT / "UI文案复核表.csv"
+# 已发布版本的源码基线：公开库镜像（发布时由 tools/sync_public.py 生成）。
+# 只用来判断「本轮状态」，不存在时不影响导出，只把状态标成「未判定」。
+BASELINE_SRC = ROOT / ".craft" / "tmp_remote" / "ZenTimer" / "app" / "src" / "main" / "java" / "com" / "yaohui" / "zentimer"
 
 BANNED = ("冥想", "meditation", "Meditation", "meditating", "Meditating", "mindfulness")
 # 繁体里不该出现的简体字（够用即可，不追求覆盖全部简繁差异）
@@ -51,9 +58,9 @@ def read_lines(name: str) -> list[str]:
     return (SRC / name).read_text(encoding="utf-8").splitlines()
 
 
-def parse_lang():
+def parse_lang(src: Path = SRC):
     """返回 {key: {hans/hant/en: (value, line)}}，以及每个 key 的行号。"""
-    text = (SRC / "Lang.kt").read_text(encoding="utf-8")
+    text = (src / "Lang.kt").read_text(encoding="utf-8")
     lines = text.splitlines()
     tables: dict[str, dict[str, tuple[str, int]]] = {}
     for m in re.finditer(r"private val (\w+) = mapOf\((.*?)\n    \)", text, re.S):
@@ -87,8 +94,8 @@ def count_refs() -> Counter:
     return refs
 
 
-def parse_sounds():
-    text = (SRC / "SoundCatalog.kt").read_text(encoding="utf-8")
+def parse_sounds(src: Path = SRC):
+    text = (src / "SoundCatalog.kt").read_text(encoding="utf-8")
     pat = re.compile(
         r'Sound\(\s*"([^"]+)"\s*,\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"\s*\)'
     )
@@ -123,7 +130,36 @@ def appinfo_rows():
     return out
 
 
-def notes_for(key, vals, refs) -> tuple[str, str, str]:
+def status_of(key: str, vals: list[str], base: dict | None) -> str:
+    """本轮状态＝当前三语值 vs 已发布基线；不再维护手写 key 白名单。
+
+    base 与 parse_lang() 同构：{lang: {key: (value, line)}}。
+    """
+    if base is None:
+        return "未判定（无发布基线）"
+    hit, same = False, True
+    for lang, v in zip(("hans", "hant", "en"), vals):
+        entry = base.get(lang, {}).get(key)
+        if entry is None:
+            continue
+        hit = True
+        if entry[0] != v:
+            same = False
+    if not hit:
+        return "本轮新增"
+    return "未改（原样）" if same else "本轮已改"
+
+
+def sound_status(sid: str, vals: tuple[str, str, str], base: dict | None) -> str:
+    if base is None:
+        return "未判定（无发布基线）"
+    old = base.get(sid)
+    if old is None:
+        return "本轮新增"
+    return "未改（原样）" if old == vals else "本轮已改"
+
+
+def notes_for(key, vals, refs, status) -> tuple[str, str, str]:
     """返回 (本轮状态, 复核标注, 待办)。"""
     hans, hant, en = vals
     joined = " ".join(vals)
@@ -149,9 +185,6 @@ def notes_for(key, vals, refs) -> tuple[str, str, str]:
         flags.append("· 按钮文字偏长，动词是否统一请复核")
     if not flags:
         flags.append("合规 · 请 AI 复核语气与简繁对等")
-    status = "本轮已改" if key in {
-        "btn_start", "section_duration", "section_interval", "state_infinite", "notif_body"
-    } else "未改（原样）"
     if refs == 0 and not key.startswith(("ui.", "unit.", "greet.", "date.")):
         status = "静态未见引用（待确认）"
     return status, "；".join(flags), ""
@@ -159,6 +192,9 @@ def notes_for(key, vals, refs) -> tuple[str, str, str]:
 
 def main():
     tables, _ = parse_lang()
+    base_lang = parse_lang(BASELINE_SRC)[0] if (BASELINE_SRC / "Lang.kt").exists() else None
+    base_sounds = ({sid: (h, ht, e) for sid, h, ht, e, _ in parse_sounds(BASELINE_SRC)}
+                   if (BASELINE_SRC / "SoundCatalog.kt").exists() else None)
     refs = count_refs()
     keys = sorted(set().union(*[set(d) for d in tables.values()]))
     rows = []
@@ -170,7 +206,7 @@ def main():
             vals.append(v)
             lines.append(ln)
         grp, scene = group_of(key)
-        status, note, todo = notes_for(key, vals, refs[key])
+        status, note, todo = notes_for(key, vals, refs[key], status_of(key, vals, base_lang))
         rows.append([
             f"L{len(rows)+1:03d}", grp, scene, "三语文案", key,
             vals[0], vals[1], vals[2],
@@ -191,7 +227,7 @@ def main():
         rows.append([
             f"S{len(rows)+1:03d}", grp, "铃声 / 背景音选择器", "素材名称", sid,
             hans, hant, en, f"SoundCatalog.kt:{ln}", "—",
-            "本轮已改" if sid == "none" else "未改（原样）",
+            sound_status(sid, vals, base_sounds),
             "；".join(flag) or "合规 · 请 AI 复核音色命名是否统一", "",
         ])
 
@@ -219,6 +255,7 @@ def main():
         w.writerows(rows)
 
     print(f"导出 {len(rows)} 行 → {OUT}")
+    print("本轮状态基线：", "已发布镜像 .craft/tmp_remote" if base_lang else "缺失（状态列标为未判定）")
     print("分组：", dict(Counter(r[1] for r in rows)))
     print("状态：", dict(Counter(r[10] for r in rows)))
     print("未引用 key：", [r[4] for r in rows if r[9] == 0 and r[3] == "三语文案"])

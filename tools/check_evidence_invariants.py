@@ -115,10 +115,12 @@ def run() -> tuple[list[tuple[str, str, str]], list[str]]:
     add(not forbidden, "不碰 RemoteViews / AOSP 样式",
         "、".join(forbidden) if forbidden else "E1 promoted 资格、E12 结论 6")
 
-    # 8. 通知中间行的状态词仍是「静坐中」（本轮文案复核一条没动它）
+    # 8. 通知中间行的状态词仍是「静坐中」（中文/繁体一条没动）
+    # v2.33 英文术语统一到 meditation 词族（用户授权），只改 EN 表 value；
+    # 四表面的中文语义与字段结构不变，故判据仍只看中繁，描述不再写「notif_body 未改动」。
     add(states.get("hans") == "静坐中" and states.get("hant") == "靜坐中",
-        "通知四表面语义未被文案复核带偏",
-        "state_running 保持原值，notif_body 未被改动")
+        "通知四表面语义未被文案修订带偏",
+        "中繁状态词仍为「静坐中 / 靜坐中」；英文术语修订见 v2.33")
 
     deviations = [
         "我们**有意**在亮屏 L2 分支写 `android.shortCriticalText`（系统闹钟从不写）。"

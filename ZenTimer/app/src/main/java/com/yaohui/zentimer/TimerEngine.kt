@@ -548,10 +548,14 @@ object TimerEngine {
         if (pausedFrom == Phase.PREP) {
             prepEndAt = now + pausedLeftMs
             _ui.value = s.copy(phase = Phase.PREP, prepLeftMs = pausedLeftMs, remainingMs = s.totalMs)
+            // v2.26：暂停本身不动兜底（保住「暂停后进程被杀」这条路），恢复时按新的结束时刻重挂。
+            // 准备阶段尚未开始计静坐，新结束时刻 = 恢复时刻 + 剩余准备 + 整段静坐。
+            DndGuard.onSittingStart(app, System.currentTimeMillis() + pausedLeftMs + s.totalMs)
         } else {
             endAt = now + pausedLeftMs
             nextIntervalAt = nextIntervalFrom(now, s.intervalMin)
             _ui.value = s.copy(phase = Phase.RUNNING, remainingMs = pausedLeftMs, prepLeftMs = 0L)
+            DndGuard.onSittingStart(app, System.currentTimeMillis() + pausedLeftMs)
         }
         persist()
     }

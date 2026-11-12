@@ -113,13 +113,6 @@ internal object SeasonTheme {
             alpha = c.alpha
         )
 
-        fun mix(a: Color, b: Color, f: Float): Color = Color(
-            red = a.red + (b.red - a.red) * f,
-            green = a.green + (b.green - a.green) * f,
-            blue = a.blue + (b.blue - a.blue) * f,
-            alpha = a.alpha
-        )
-
         return base.copy(
             bg = t.paper,
             elevated = shift(base.elevated),
@@ -128,8 +121,44 @@ internal object SeasonTheme {
             stroke = shift(base.stroke),
             divider = shift(base.divider),
             accent = t.accent,
-            accentDim = mix(t.accent, t.paper, 0.34f),
+            accentDim = dimAgainst(t.accent, t.paper, 0.34f, 4.5),
             text = if (dark) Color(0xFFE8E6E1) else base.text
         )
+    }
+
+    private fun srgbToLinear(v: Float): Double {
+        val s = v.toDouble()
+        return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+    }
+
+    private fun relativeLuminance(c: Color): Double =
+        0.2126 * srgbToLinear(c.red) + 0.7152 * srgbToLinear(c.green) + 0.0722 * srgbToLinear(c.blue)
+
+    private fun contrastRatio(a: Color, b: Color): Double {
+        val la = relativeLuminance(a)
+        val lb = relativeLuminance(b)
+        return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
+    }
+
+    private fun blend(a: Color, b: Color, f: Float): Color = Color(
+        red = a.red + (b.red - a.red) * f,
+        green = a.green + (b.green - a.green) * f,
+        blue = a.blue + (b.blue - a.blue) * f,
+        alpha = a.alpha
+    )
+
+    /**
+     * v2.26：accentDim 原来固定朝纸色淡化 34%。浅色纸 + 最亮的那一季只剩 2.42:1，
+     * 11sp 提示行读不清。改为「尽量淡化，但不低于 4.5:1」——从 34% 往回退，
+     * 一年四季共用同一套推导，不做单季补丁。
+     */
+    private fun dimAgainst(accent: Color, paper: Color, maxFade: Float, minRatio: Double): Color {
+        var fade = maxFade
+        var out = blend(accent, paper, fade)
+        while (fade > 0f && contrastRatio(out, paper) < minRatio) {
+            fade = (fade - 0.02f).coerceAtLeast(0f)
+            out = blend(accent, paper, fade)
+        }
+        return out
     }
 }

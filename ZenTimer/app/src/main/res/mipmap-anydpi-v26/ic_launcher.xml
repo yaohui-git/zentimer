@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 前景复用 xapk 内的铜钵实物图（去白底居中），背景为改换后的冷墨蓝。 -->
+<!-- 前景沿用原有青绿打坐人形 + 暖金计时圆环，未改一笔；
+     v2.32 起背景为宣纸暖白（丁方案「仅换底色」，用户 11-12 选型）。 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />

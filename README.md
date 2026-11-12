@@ -15,11 +15,11 @@
 一个**完全离线、极简禅意**的静坐计时工具：一屏一只圆环，选时长、准备安顿、听一声钵、坐一会儿、再听一声钵结束。
 没有课程、社区、账号、统计、练习记录、广告、推送与信息流；预设收在顶栏书签，设置与关于收在侧滑抽屉，主屏不留常驻控件。留白、暖金细线、不打扰。
 
-**应用不弹运行时权限对话框**：代码里没有 `requestPermissions` 调用，不会向用户弹网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框。清单共 7 项权限，除勿扰权限外全部安装即授予。**唯一需要用户亲手授权一次的是「静坐时免打扰」**：它是系统「特殊访问权限」，开关默认关闭，只有用户主动打开时才跳到系统设置页；不授权不影响计时、铃声与其余全部功能，撤销授权也不会打断正在进行的一轮。也没有 `INTERNET` 权限，技术上无法联网。无第三方 SDK、无统计、无崩溃上报，所有设置只存本机。
+**只请求一项通知权限，其余一概不弹**：应用不会请求网络、位置、通讯录、相机、麦克风、存储、账号或登录授权。Android 13 及以上首次进入时会请求一次通知权限——常驻倒计时、状态栏实时动态与锁屏卡片都要用它；拒绝也只是「看不见通知」，计时与铃声照常。另有一项 `ACCESS_NOTIFICATION_POLICY` 属于系统「特殊访问权限」，只在用户主动打开「静坐时免打扰」时才跳一次系统设置页，开关默认关闭，不授权不影响计时、铃声与其余全部功能，撤销授权也不会打断正在进行的一轮。也没有 `INTERNET` 权限，技术上无法联网。无第三方 SDK、无统计、无崩溃上报，所有设置只存本机。
 
 界面、声音与交互围绕「一屏一只圆环」这条主线独立设计；功能边界先做静态梳理，再按「只留计时核心」裁剪。简体中文 / 繁體中文 / English 三语，**首次默认跟随系统**（其他语言自动 English），应用内随时切换，不打断正在进行的练习。
 
-**English summary:** A minimal, offline Zen sitting timer for Android — one ring on screen, one bowl to begin, one bowl to end. No courses, no account, no analytics, no ads, no feeds. **No runtime permission dialogs**: the app never calls `requestPermissions` and never asks for network, location, contacts, camera, microphone, storage or sign-in, and has no `INTERNET` permission at all. The one exception is the optional, off-by-default "Do not disturb while sitting" feature, which needs a one-time grant of notification policy access in system settings; declining it changes nothing else. Simplified Chinese, Traditional Chinese and English, following the system locale by default (English for every other locale); dark / light / system theme. Apache-2.0 covers the code only — bundled third-party audio/images are **not** covered (see [NOTICE](NOTICE.md)).
+**English summary:** A minimal, offline Zen sitting timer for Android — one ring on screen, one bowl to begin, one bowl to end. No courses, no account, no analytics, no ads, no feeds. **One notification permission, nothing else**: the app never asks for network, location, contacts, camera, microphone, storage or sign-in, and has no `INTERNET` permission at all. On Android 13+ it requests the notification permission once on first launch, so the countdown stays visible on the lock screen and in the status bar; declining it only hides the notification. Separately, the optional, off-by-default "Do not disturb while sitting" feature needs a one-time grant of notification policy access in system settings; declining it changes nothing else. Simplified Chinese, Traditional Chinese and English, following the system locale by default (English for every other locale); dark / light / system theme. Apache-2.0 covers the code only — bundled third-party audio/images are **not** covered (see [NOTICE](NOTICE.md)).
 
 ---
 
@@ -63,17 +63,17 @@
 | 交互 | 菜单是**侧滑抽屉**（边缘手势 / 点遮罩 / 返回收起）；系统返回键逐层回退，主页再按一次才退出；时长设置位于卡片顶部、铃声在下 |
 | 首屏克制 | 预设**不占主屏常驻空间**——只有顶栏一个书签图标，点开才出现底部面板。选预设是高频、保存 / 管理是低频，两者不放同一层级；时间设置区始终留在首屏 |
 | 关于 | 版本、作者、邮箱、微信、公众号、**开源地址**、许可、隐私政策、素材说明（离线可读） |
-| **打赏** | 「加微信打赏」：点一下复制微信号并唤起微信。**不内嵌支付、不展示收款码**，本应用不处理任何付款 |
+| **捐助** | 「关于」页只有一行说明与 GitHub 项目主页：点一下只把地址复制到剪贴板，**不唤起浏览器或微信、不内嵌支付、不展示收款码**，本应用不处理任何付款 |
 | 全面屏 / 尺寸 | 用系统 `WindowInsets.safeDrawing`（statusBars + displayCutout + navigationBars）避开挖孔 / 刘海 / 曲面；内容列按最大宽度居中收敛、圆环随屏宽与横竖屏自适应、抽屉与铃声网格自适应。**不按机型硬编码**；折叠屏铰链感知 / 双栏布局复杂度高，当前不做（本项未做真机专项测试） |
-| 不弹运行时授权框 | 代码中没有任何 `requestPermissions` 调用：不弹网络 / 位置 / 通讯录 / 相机 / 麦克风 / 存储 / 账号登录授权框。唯一的例外是「静坐时免打扰」需要用户在系统设置里亲手授权一次勿扰权限，**默认关闭、可完全不用** |
+| 权限请求 | 只请求一项通知权限（Android 13+ 首次进入时一次），用于常驻倒计时与锁屏 / 状态栏实时信息；不请求网络 / 位置 / 通讯录 / 相机 / 麦克风 / 存储 / 账号登录。另一项「静坐时免打扰」是系统「特殊访问权限」，需用户在系统设置里亲手授权一次，**默认关闭、可完全不用** |
 
-**权限 / 不弹运行时授权框**：清单声明 7 项 —— `FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`POST_NOTIFICATIONS`、`WAKE_LOCK`、`POST_PROMOTED_NOTIFICATIONS`（以上 5 项为前台保活、息屏唤醒与锁屏计时展示，安装即授予）、`ACCESS_NOTIFICATION_POLICY`、`RECEIVE_BOOT_COMPLETED`（以上 2 项为 v2.25「静坐时免打扰」与重启后收干净残留规则）。打包时 Android 会自动追加 1 条 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，不是我们申请的。**应用从不调用 `requestPermissions`，不会向用户弹出任何运行时授权框**；只有用户主动打开「静坐时免打扰」时才跳一次系统的「勿扰权限」设置页，这与弹框授权是两回事，不授权不影响计时与铃声。**无 INTERNET**，无位置 / 通讯录 / 相机 / 录音 / 健康数据 / 广告 ID / 内购。manifest 里的 `<queries>` 是 Android 11+ 包可见性声明，不是权限。
+**权限**：清单声明 7 项 —— `FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_SPECIAL_USE`、`WAKE_LOCK`、`POST_PROMOTED_NOTIFICATIONS`、`RECEIVE_BOOT_COMPLETED`（以上 5 项安装即授予，不需要用户点「允许」）、`POST_NOTIFICATIONS`（Android 13 及以上首次进入时请求一次，用于常驻倒计时与锁屏 / 状态栏实时信息）、`ACCESS_NOTIFICATION_POLICY`（v2.25「静坐时免打扰」，特殊访问权限，只有用户主动打开开关时才跳一次系统设置页）。打包时 Android 会自动追加 1 条 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，不是我们申请的。**除这一次通知权限外，应用不向用户弹出任何授权框**；拒绝通知权限只是看不见通知，计时、铃声与免打扰开关都不受影响。**无 INTERNET**，无位置 / 通讯录 / 相机 / 录音 / 健康数据 / 广告 ID / 内购。manifest 里的 `<queries>` 是 Android 11+ 包可见性声明，不是权限。
 
 ---
 
 ## 安装
 
-> **当前稳定版：v2.17（versionCode 18，2026-11-09）**。本版先在仓库里放约一周观察，收集 Issue 反馈、按需修补，之后才考虑更广泛地推广；商店上架等推广动作**本轮不做**。四个显示表面的验收结论见下方「真机验收」与 [`CHANGELOG.md`](CHANGELOG.md)。遇到问题请走 GitHub Issues。
+> **版本口径（2026-11-11）**：本地稳定版 **v2.29（versionCode 30）**，`releases/zentimer-v2.29.apk`，本地 tag `v2.29-basic-stable-4`，**尚未推 GitHub**；公开仓库最近一次同步是 **v2.25（`dd5aa13`）**。商店上架等推广动作**本轮不做**。四个显示表面的验收结论见下方「真机验收」与 [`CHANGELOG.md`](CHANGELOG.md)。遇到问题请走 GitHub Issues。
 
 直接装 [`releases/zentimer-v2.17.apk`](releases/zentimer-v2.17.apk)（Android 8.0 / API 26+，约 27 MB，已签名并对齐）。
 
@@ -135,17 +135,15 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 ---
 
-## 打赏作者
+## 支持这个项目
 
-这个应用是个人作品，完全免费、无广告、无内购，打赏纯属自愿，**不解锁任何功能**。
+这个应用是个人作品：免费、无广告、无内购，**不解锁任何功能**。捐助纯属自愿，不提供任何额外功能或服务，不构成购买。
 
-如果它对你有用，想支持一下：
+「关于」页只有一行说明和 GitHub 项目主页地址，**点一下只把地址复制到系统剪贴板**——不唤起浏览器、不唤起微信、不展示收款码、不内嵌支付、不接任何支付 SDK，本应用不处理金额、订单或付款结果。是否捐助、捐助多少，完全由你在 GitHub 页面自行决定。
 
-> **加微信 `pingyishufang`（平人）**，金额随意、完全自愿。
+为什么不内嵌支付：微信个人收款码没有公开的一步唤起接口；支付宝个人静态收款码用于经营性 / 远程非面对面收款存在明确合规红线（央行银发〔2021〕259 号）；国内商店的「虚拟打赏」还可能要求 ICP 经营许可证。
 
-应用「关于」页里点一下「打赏作者」会自动复制微信号并唤起微信；你也可以在微信里直接搜索这个号。**本应用不展示收款码、不内嵌支付、不接任何支付 SDK、不处理金额 / 订单 / 付款结果**，付款全程发生在微信里。
-
-之所以刻意不做内嵌支付：微信个人收款码没有公开的一步唤起接口，支付宝个人静态收款码用于经营性 / 远程非面对面收款存在明确合规红线（央行银发〔2021〕259 号），国内商店的「虚拟打赏」还可能要求 ICP 经营许可证。
+代码以 Apache-2.0 开源；随包音频与图片不在该协议内，见 [NOTICE.md](NOTICE.md)。
 
 | | |
 | --- | --- |
@@ -159,7 +157,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 **支持定制。** 寺院、道观等非营利组织可享**优惠或免费**定制；其他用途另议。
 
-可定制范围：应用名称、启动图标、主题配色、铃声与背景音、默认时长 / 准备 / 间隔方案、界面文案与「关于」页信息。定制版同样守住三条底线：**离线、不弹运行时授权框、无广告**，并保持极简禅意。「静坐时免打扰」按需要决定是否保留，保留时仍需用户在系统设置里亲手授权一次。
+可定制范围：应用名称、启动图标、主题配色、铃声与背景音、默认时长 / 准备 / 间隔方案、界面文案与「关于」页信息。定制版同样守住三条底线：**离线、不申请多余权限、无广告**，并保持极简禅意。「静坐时免打扰」按需要决定是否保留，保留时仍需用户在系统设置里亲手授权一次。
 
 联系：耀慧 · <luoxu_disk@163.com> · 微信 `pingyishufang` · 公众号「何处青山不道场」。
 
@@ -180,7 +178,7 @@ v2.3 已在 **M2003J15SC（Redmi Note 9 系列，Android 12 / SDK 31，1080×234
 
 ## 隐私
 
-不联网、不收集任何数据、不含第三方 SDK、不弹运行时授权框。语言 / 主题色偏好、设置与预设只存在本机 SharedPreferences，卸载即清除。完整政策见 [`PRIVACY-POLICY.md`](PRIVACY-POLICY.md)。
+不联网、不收集任何数据、不含第三方 SDK；只请求一项通知权限，不申请任何与个人信息相关的授权。语言 / 主题色偏好、设置与预设只存在本机 SharedPreferences，卸载即清除。完整政策见 [`PRIVACY-POLICY.md`](PRIVACY-POLICY.md)。
 
 ---
 

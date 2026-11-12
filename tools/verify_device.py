@@ -56,15 +56,30 @@ PLAN_PAPER = {
     "winter": (0xF4, 0xF4, 0xF3),
 }
 
-# v2.25 稳定版文案；改 Lang.kt 后同步这里。
+# v2.26 文案（用户 11-11 口径）；改 Lang.kt 后同步这里。
+# 四条改动项按三语齐备：season_fine_tune / season_note / dnd_title / dnd_sub。
 EXPECT = {
-    "season_title": "随节气微调",
-    "season_running_note": "静坐中不改变纸色",
+    "season_title": "随节气换肤",
+    "season_note": "随四季更替，自动更换主题色",
+    "season_running_note": "静坐中不更换主题色",
     "dnd_title": "静坐时免打扰",
+    "dnd_sub": "静坐时不被通知与来电打断，结束后自动恢复",
     "dnd_denied": "未获得勿扰权限",
     "dnd_active": "免打扰中",
-    "en_season_title": "Seasonal paper tone",
-    "hant_season_title": "隨節氣微調",
+    "en_season_title": "Seasonal theme",
+    "en_season_note": "Theme colors change automatically with the seasons",
+    "en_dnd_title": "Do not disturb while sitting",
+    "en_dnd_sub": "Notifications and calls stay quiet; back to normal afterwards",
+    "hant_season_title": "隨節氣換膚",
+    "hant_season_note": "隨四季更替，自動更換主題色",
+    "hant_dnd_title": "靜坐時免打擾",
+    "hant_dnd_sub": "靜坐時不被通知與來電打斷，結束後自動恢復",
+    # v2.26 方案 D：首页「声音」折叠头。可见文字只有「声音」，
+    # 两个状态词与整个摘要由 clearAndSetSemantics 拼进 content-desc，用 cd_list 取。
+    "sound_group": "铃声与背景",
+    "fold_collapsed": "已收起",
+    "fold_expanded": "已展开",
+    "label_ambience": "背景音",
 }
 
 RESULTS: list[tuple[str, bool, str]] = []
@@ -498,12 +513,20 @@ sh("shell", "settings", "delete", "global", "zentimer_season_month")
 #  M 组 · 静坐时免打扰与复原底线（18 项）
 # --------------------------------------------------------------------------
 cold()
+# v2.26 方案 D：冷启动首页默认收起；折叠头自报「声音, …, 已收起」，
+# 4 行里只有「背景音」这行被折掉，用它当收起判据。
+fold_home = dump("D0_home_fold")
+check("D0 首页声音折叠头常驻且默认收起",
+      any(f'{EXPECT["sound_group"]}，' in c and EXPECT["fold_collapsed"] in c
+          for c in cd_list(fold_home))
+      and EXPECT["label_ambience"] not in text_list(fold_home),
+      " | ".join(c for c in cd_list(fold_home) if EXPECT["sound_group"] in c))
 open_settings()
 xml = dump("M0_settings")
-check("M0 设置页两处新开关齐备",
-      any(EXPECT["season_title"] in c for c in cd_list(xml)) and
-      any(EXPECT["dnd_title"] in c for c in cd_list(xml)),
-      " | ".join(c for c in cd_list(xml) if "微调" in c or "免打扰" in c))
+check("M0 设置页两处新开关齐备（标题 + 说明四条）",
+      any(EXPECT["season_title"] in c and EXPECT["season_note"] in c for c in cd_list(xml)) and
+      any(EXPECT["dnd_title"] in c and EXPECT["dnd_sub"] in c for c in cd_list(xml)),
+      " | ".join(c for c in cd_list(xml) if "换肤" in c or "免打扰" in c))
 set_dnd(True, "M0_after_on")
 back_home()
 
@@ -570,7 +593,14 @@ back_home()
 sh("shell", "cmd", "notification", "disallow_dnd", PKG)
 cold()
 open_settings()
-xml = dump("M15_revoked")
+# v2.30 复核：说明行确实会出现，但冷启动后 Compose 重组可能晚一帧，
+# 首轮 dump 抓不到就误判 FAIL。等它出现，最多 5 次 × 0.7s。
+xml = ""
+for _ in range(5):
+    xml = dump("M15_revoked")
+    if EXPECT["dnd_denied"] in " ".join(text_list(xml)):
+        break
+    time.sleep(0.7)
 check("M15 撤销权限后 App 不崩且给说明",
       EXPECT["dnd_title"] in " ".join(cd_list(xml)) and
       not dnd_is_on(xml) and
@@ -582,11 +612,14 @@ back_home()
 sh("shell", "cmd", "notification", "allow_dnd", PKG)
 cold()
 open_settings()
-for lang, idx, expect in (("en", 2, EXPECT["en_season_title"]),
-                          ("hant", 1, EXPECT["hant_season_title"])):
+for lang, idx, expects in (("en", 2, (EXPECT["en_season_title"], EXPECT["en_season_note"],
+                                       EXPECT["en_dnd_title"], EXPECT["en_dnd_sub"])),
+                           ("hant", 1, (EXPECT["hant_season_title"], EXPECT["hant_season_note"],
+                                        EXPECT["hant_dnd_title"], EXPECT["hant_dnd_sub"]))):
     xml = set_language(idx, f"M16_{lang}")
-    ok = any(expect in c for c in cd_list(xml)) and "undefined" not in xml.lower()
-    check(f"M16 {lang} 新文案齐备无截断", ok, expect)
+    joined = " ".join(cd_list(xml))
+    ok = all(e in joined for e in expects) and "undefined" not in xml.lower()
+    check(f"M16 {lang} 四条新文案齐备无截断", ok, " / ".join(expects))
 set_language(0, "lang_restore")
 back_home()
 
@@ -604,7 +637,11 @@ all_bounds = [tuple(map(int, b)) for b in BOUNDS_RE.findall(big)]
 bad = [b for b in all_bounds if b[0] < 0 or b[2] > w_px or b[1] < 0 or b[3] > h_px]
 big_words = text_list(big)
 check("N2 1.3 倍字体下首屏无越界、关键文案完整",
-      not bad and "开始静坐" in big_words and "静坐时长" in big_words,
+      # v2.30：设置卡已删「静坐时长」行，改认脚边提示 + 清单首行，仍验「首屏关键文案完整」
+      # v2.31：提示回到圆环内后被 clearAndSetSemantics 合进圆环读屏名，
+      # 控件树里没有独立 text 节点，改从整份 dump（含 content-desc）里认。
+      not bad and all(w in big_words for w in ("开始静坐", "提醒间隔"))
+      and "轻触圆环改时长" in big,
       f"越界控件 {len(bad)} / 共 {len(all_bounds)}；文字 {len(big_words)} 条")
 open_settings()
 shot("N2_font13_settings")
@@ -636,11 +673,17 @@ out_of_screen = [b for b in bounds if b[0] < 0 or b[2] > w_px or b[1] < 0 or b[3
 time_nodes = [n for n in text_nodes(xml)
                 if re.fullmatch(r"\d{1,2}:\d{2}(:\d{2})?", n[2])]
 time_y = time_nodes[0][1] if time_nodes else 0
-dur_y = find_node(xml, 'text="静坐时长"')[1]
-distance = dur_y - time_y if time_y and dur_y else -1
-check("N4 首屏在 1280x2772 无控件越界", not out_of_screen,
+# v2.31：用户否决 2.30「提示悬在圈外」，提示回到圆环内、被 clearAndSetSemantics
+# 合进圆环读屏名，控件树里不再有独立 text 节点。判据因此改成两条可证事实：
+# ① 圆环这个节点的 content-desc 含提示；② 全树不存在 text="轻触圆环改时长" 的独立行。
+ring_nodes = [m.group(0) for m in re.finditer(r"<node[^>]*>", xml)]
+ring_hint = [n for n in ring_nodes
+             if "content-desc=" in n and "轻触圆环改时长" in n]
+standalone = 'text="轻触圆环改时长"' in xml
+check("N4 首屏无控件越界且提示仍在圆环内",
+      not out_of_screen and bool(ring_hint) and not standalone,
       f"越界 {len(out_of_screen)} / 共 {len(bounds)}；"
-      f"圆环中心→「静坐时长」行垂直距离 {distance}px（用户反馈「超出视野」的量化）")
+      f"圆环读屏名含提示 {len(ring_hint)} 处 / 圈外独立提示行={standalone}（v2.31 不变量）")
 
 check("N5 结束后设备级勿扰过滤回到基线",
       filter_after == base_filter and zen_mode_sys() == base_zen_mode_sys,

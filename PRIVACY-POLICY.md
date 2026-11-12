@@ -1,7 +1,7 @@
 # 隐私政策 / Privacy Policy
 
 **生效日期 / Effective date:** 2026-11-11
-**适用 / Applies to:** 静息 · zentimer（一款极简禅意静坐计时器 / A minimal Zen sitting timer，`com.yaohui.zentimer`），Android 版 · v2.25
+**适用 / Applies to:** 静息 · zentimer（一款极简禅意静坐计时器 / A minimal Zen sitting timer，`com.yaohui.zentimer`），Android 版 · **v2.25 及之后版本**（当前本地稳定版 v2.29 / versionCode 30）
 
 ---
 
@@ -24,9 +24,9 @@
 
 应用 **没有** `INTERNET` 权限，因此技术上无法把任何数据发送到网络。也没有位置、通讯录、相机、麦克风、短信、存储读写、健康数据、广告 ID、内购或账号权限。
 
-**应用不弹运行时权限对话框**：代码里没有 `requestPermissions` 调用，不会向用户弹出网络、位置、通讯录、相机、麦克风、存储、账号或登录授权框，连上表中的通知权限也不会弹框。上表前五项只是清单声明、安装即授予；忽略或拒绝不影响计时与铃声。**唯一需要用户亲手授权一次的是「静坐时免打扰」**：它是系统的「特殊访问权限」，不是弹框授权，只在用户主动打开该开关时才跳一次系统设置页；不授权时该开关弹回关闭，静坐照常进行。本应用**不读取通知内容、不改动系统全局勿扰开关、不改写用户已有的勿扰规则**，只激活与停用自己那条名为「静坐」的模式；结束、进程重启、手机重启与兜底闹钟都会把它停用。
+**应用只请求一项通知权限**：Android 13 及以上首次进入时会请求 `POST_NOTIFICATIONS`，用于显示常驻倒计时、状态栏实时动态与锁屏卡片；拒绝或忽略只是看不见通知，不影响计时与铃声。除此之外，应用不会请求网络、位置、通讯录、相机、麦克风、存储、账号或登录授权。上表中其余 5 项只是清单声明、安装即授予。另一项需要用户亲手授权的是「静坐时免打扰」：它是系统的「特殊访问权限」，不是弹框授权，只在用户主动打开该开关时才跳一次系统设置页；不授权时该开关弹回关闭，静坐照常进行。本应用**不读取通知内容、不改动系统全局勿扰开关、不改写用户已有的勿扰规则**，只激活与停用自己那条名为「静坐」的模式；结束、进程重启、手机重启与兜底闹钟都会把它停用。
 
-清单里的 `<queries>` 只声明「本应用需要看见系统里是否安装了邮件、浏览器、微信客户端」，属于 Android 11+ 的包可见性声明，**不是权限**，不授予任何设备能力。
+清单里的 `<queries>` 只声明本应用会用系统邮件应用打开邮箱地址、用浏览器打开网页，属于 Android 11+ 的包可见性声明，**不是权限**，不授予任何设备能力，也不含微信或其他应用包名。
 
 ### 本机存储的数据
 以下数据只写入本应用的私有 `SharedPreferences`，不备份到云端、不共享给其他应用、不用于分析：
@@ -44,7 +44,7 @@
 ### 第三方与外部应用
 无第三方 SDK、无广告、无统计分析、无崩溃上报、无账号体系、无内容下载。「关于」页的邮箱、开源地址通过系统邮件 / 浏览器应用打开，微信、公众号与微信号可复制到系统剪贴板；这些动作由对应应用自行处理，本应用不接收任何回传。
 
-**加微信打赏**：点击打赏卡片会把微信号复制进系统剪贴板并唤起微信客户端。本应用**不展示收款码、不内嵌支付页面、不接任何支付接口、不处理金额或订单、不接收付款结果**，付款完全发生在微信内、由用户自行决定。若未安装微信，只复制微信号并给出提示。
+**捐助**：应用内只展示 GitHub 项目主页与一行说明，点击只把该地址复制进系统剪贴板；**不唤起浏览器或微信、不展示收款码、不内嵌支付页面、不接任何支付接口、不处理金额或订单、不接收付款结果**。是否捐助完全由用户自行决定，不换取任何功能或服务。
 
 ### 儿童
 本应用不含面向儿童的内容收集，不要求注册或填写任何个人信息。
@@ -73,9 +73,9 @@
 
 The app has **no `INTERNET` permission**, so it technically cannot transmit data. It also has no location, contacts, camera, microphone, SMS, external storage, health, advertising ID, billing, or account permissions.
 
-**The app shows no runtime permission dialog**: there is no `requestPermissions` call, so no prompt for network, location, contacts, camera, microphone, storage, account or sign-in — not even for the notification permission listed above. The first five manifest entries are granted at install; ignoring them affects nothing but the notification. **The one manual grant is for "Do not disturb while sitting"**: it is a special-access permission handled in system settings, not a permission dialog, and is reached only if the user turns the switch on. Without that grant the switch returns to off and the sitting continues. The app **does not read notification content, does not change the device-wide Do Not Disturb state, and does not modify any of the user's existing rules** — it only activates and deactivates its own mode named "Sitting"; ending the sitting, a cold start, a reboot and a fallback alarm all deactivate it.
+**The app requests one notification permission**: on Android 13+ it asks for `POST_NOTIFICATIONS` once on first launch so the ongoing countdown, the status-bar live activity and the lock-screen card can be shown; declining or ignoring it only hides the notification and does not affect the timer or the bells. Beyond that, the app never asks for network, location, contacts, camera, microphone, storage, account or sign-in. The other five manifest entries are granted at install. The one other user grant is for "Do not disturb while sitting": it is a special-access permission handled in system settings, not a permission dialog, and is reached only if the user turns the switch on. Without that grant the switch returns to off and the sitting continues. The app **does not read notification content, does not change the device-wide Do Not Disturb state, and does not modify any of the user's existing rules** — it only activates and deactivates its own mode named "Sitting"; ending the sitting, a cold start, a reboot and a fallback alarm all deactivate it.
 
-The `<queries>` entries in the manifest only declare package visibility (mail, browser, WeChat) on Android 11+. They are **not permissions** and grant no device capabilities.
+The `<queries>` entries in the manifest only declare package visibility for opening an email address in the system mail app and a web page in the browser on Android 11+. They are **not permissions**, grant no device capabilities, and contain no WeChat or other app package names.
 
 ### On-device data
 Only these values are stored in the app's private `SharedPreferences`, never synced or shared:
@@ -93,7 +93,7 @@ All of it is removed when the app is uninstalled.
 ### Third parties & external apps
 No third-party SDKs, ads, analytics, crash reporting, accounts, or content downloads. Email and source-code links in the About page open in the system mail / browser apps; the WeChat ID and Official Account name can be copied to the system clipboard. Those apps handle the action independently — this app receives nothing back.
 
-**"Tip via WeChat"**: tapping the card copies the WeChat ID to the system clipboard and launches WeChat. This app **shows no QR code, embeds no payment page, integrates no payment SDK, handles no amount or order, and receives no payment result**. Any payment happens entirely inside WeChat at the user's discretion. If WeChat is not installed, only the ID is copied and a hint is shown.
+**Donation**: the About page shows only one line of text and the GitHub project URL; tapping it copies that URL to the system clipboard. The app **does not open a browser or WeChat, shows no QR code, embeds no payment page, integrates no payment SDK, handles no amount or order, and receives no payment result**. Whether to donate is entirely the user's decision and unlocks no features or services.
 
 ### Children
 No data is collected from anyone, including children. No registration or personal details are required.

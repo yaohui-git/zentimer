@@ -1,5 +1,170 @@
 # 更新日志 / Changelog
 
+> ## 11-12 10:xx v2.33 · 撤掉假的可拖动暗示 + 文案术语校准 + 三行贴左（**本条为当前口径；下方 v2.32 及更早原文完整保留**）
+>
+> **用户原话**：09:51「铃声选择页，顶部的粗横线，会让我不自主去下滑收起，但目前不支持…
+> 类似的视觉误解，如果还有，一并修复」「检查全部的UI文案，给出优化建议。如 sitting 就不应该是
+> 静坐的英文转义，太不专业了。评判文案合适与否，需要懂禅修的专业人士来审查」
+> 「更新相关文档和截图等，再次 push 到 github 一次。作为新版的稳定内测版」；
+> 09:58「meditation，如果佛光山用了，而且也没有更好选择。那就可以先用着。**之前的未必是规则，
+> 也许只是一次需求更新而已（暂时的，一次性的）**」；10:03「interval、preparation\
+> bells & backgroud 那三行没有左靠齐…你看是左对齐，还是补几个icon…当然依旧要复核既定的设计原则」。
+>
+> **视觉可供性（三条，真机取证见 `design/视觉可供性审计-2026-11-12.md`）**
+> - **A 主诉**：`SoundPicker` 为修 v2.19 抖动关了 `sheetGesturesEnabled`，却仍画 M3 默认
+>   drag handle，读屏还报「拖动手柄」。10X 实测下滑 1100px 弹层纹丝不动 —— 视觉 + 无障碍
+>   双重误导。修法 `dragHandle = { }`：**不重新启用手势**（会把 v2.19 抖动带回来），只撤假暗示，
+>   取消/确定/遮罩/返回四条出口一个不少。
+> - **B 自行挖出**：档位层展开后圆环已是 toggle，圈内却仍写「轻触圆环改时长」。复用已有
+>   `editing` 布尔量切到新三语 key `hint_tap_ring_close`，行数不变、不碰状态机。
+> - **D 判定无需改**：常用预设弹层的横线**是真的能拖**（从手柄下滑 1000px 直接关闭），
+>   视觉与能力一致，保留。**不是所有横线都该去掉**。
+> - 另扫 8 个界面 / 元素（折叠 chevron、计时中圆环、档位胶囊、滚轮、通知设置跳转、
+>   关于页条目、×N 胶囊、预设子页），无同类误导，不凑数硬改。
+>
+> **三行设置卡**：原三行都留 50dp 空白，代码注释写明是「为与展开态铃声图标列对齐」；
+> 收起态无图标时成怪异留白。**选左对齐、不补 icon**：默认态优先、不新增视觉元素；
+> 展开态形成「主项贴左 / 子项带图标缩进」的层级。补 3 个图标会让间隔/准备与计时圆环
+> 语义打架，也不够克制。删 3 个 Spacer，不动行高/分隔线/D03 视口量法。
+>
+> **文案（`design/UI文案专业审查-2026-11-12.md`，只改 EN value，中文/繁体一字未动）**
+> - 依据：佛光山《Sitting Meditation》、法鼓山圣严法师 `Zuo Chan (sitting meditation)`、
+>   宣化上人双语开示（七宝塔 = stupa、胜过 = surpass）、偈颂出处元·楚石梵琦。
+>   同时如实记录反方：白风禅社群**刻意**用 `sitting` 代替 meditation ——
+>   所以准确结论不是「sitting 错译」，而是**宗派行话不该当大众 UI 通用语**，
+>   尤其不能作定语（`Sitting time`）或生造复合词（`Zen sitting`）。
+> - 按用户 09:58 授权统一到 meditation 词族：`state_running → Meditating`、
+>   `section_duration → Duration`、`notif_body → Meditation · `、
+>   `dnd_rule_name → Meditation`、偈颂英译改 `sitting meditation / stupas / surpasses`，
+>   另 4 条 session / during meditation 一致性修订，共 9 处替换 + 3 条新 key。
+> - **撤销** 11-09 把 `meditation` 列禁用词的一次性口径：`BANNED` 收窄为
+>   `("冥想", "mindfulness")`，旧《UI文案复核决定.md》全文保留、只加时效注。
+> - **明确未定稿**：偈颂英译、宗派定位、法器/音色罗马字、中文「静坐」定义 ——
+>   四项需法师 / 禅修老师 / 佛典译者过目，本报告只给选项，不冒充结论。
+>
+> **闸门**：`check_ui_copy.py` 加三条硬断言（假 handle 已撤 / 编辑态提示一致 / 无 50dp 占位），
+> 反转旧的「七行同竖线」判据；`check_evidence_invariants.py` 第 8 条描述改准
+> （不再写已不成立的「notif_body 未被改动」）。55 PASS / 3 WARN / 0 FAIL、三语 125×3、
+> 证据 8 PASS / 0 FAIL。
+>
+> **真机验收**：`probe_v233.py` **14/14 PASS**（左边缘三行均 110px、假手柄节点 0 个、
+> 遮罩退出回 24 节点首页、常用预设下滑真关闭、准备相位走完 `14:53, Meditating`）；
+> `probe_d03.py --loop 3 --nav-top 2210` **3/3 PASS**（末两行各 66px、收起干净）。
+> 期间修掉三次**脚本自身**缺陷（见下），均不计产品问题。
+>
+> **交付**：2.33 / vc34，装机红米 10X（`firstInstallTime` 未变）；`screenshots/` 重拍 7 张
+> （首页 / 档位层 / 铃声弹层 / 常用预设 / 计时中 / 关于 / 设置）；本地提交 + 公开 GitHub
+> 仓库 `yaohui-git/zentimer` 同步一次 release 提交与稳定内测 tag。
+> **本轮没有**：状态机 / 相位逻辑 / 通知字段结构 / 中文文案 / 图标资源改动；
+> AOD 深睡态未重拍（沿用既有不变量结论，不谎称已验）。
+
+> ## 11-12 09:xx v2.32 · 第四款图标落地 + 两条编辑态收回（**本条为当前口径；下方 v2.31 及更早原文完整保留**）
+>
+> **用户原话**：「先用第四款ICON吧。另外这两个尽量做一下，但如果熵增太过，告诉我
+> * 点击圆圈，露出时长选项后，再次点击圆圈，要不要收回时长选项？
+> * 点击preparation后，在屏幕底部点空白，并不会收回时长选项。不知道是不是还有类似的问题，你也可以自行再多挖掘下」；
+> 08:57 追加元宝方案两份附件「再考虑下这个方案，是元宝提出来的，供你参考，决策在你」。
+>
+> **决策**：图标按用户明确选的第四款「丁 · 仅换底色」落地；元宝方案**本轮不换稿**，只收三条方法铁律
+> （48dp 优先 / 载体分工 / 宣纸是材质）与「下一轮只把图形换成 C · 一刻」，逐条判断见
+> `design/图标重设计-元宝方案判断.md`、`.impeccable.md` §0.1。两条交互评估后判**低熵，已修**；
+> E-2 起跑后档位层残留 / E-3 编辑态点 Start 直接起跑**会动状态机，明确登记不动**（§8.3）。
+>
+> **图标（纯资源，零 Kotlin）**：新增 `@color/launcher_bg = #F0EBE1` 与运行时 `@color/bg` 隔离
+> （改 `bg` 会把首页也刷白）；`ic_launcher_background.xml` 改引用它；adaptive 前景一笔未动；
+> 五档 legacy mipmap 与 `store/icon-512.png` 用宣纸底 + 原前景重生成，旧商店图留档
+> `store/icon-512-old-dark.png`。生成入口 `tools/apply_icon_d.py`；`tools/make_icons.py`
+> 头部加「别误跑」注记（它产出旧底，重跑会覆盖回去）。落地清单 `design/图标重设计-方案与依据.md` §6。
+>
+> **交互（`MainActivity.kt` 三处）**：① `onEditDuration` 从幂等赋值改 toggle，再点圆环即收，
+> 收起时成对 `wheelShowing = false`（照抄 `onToggleSound` 已有写法）；② 把
+> `pointerInput(detectTapGestures)` 从 wrapContent 内层 Column **移到** `fillMaxSize` 外层 Box，
+> 覆盖屏幕底部与左右 padding 外的空白，**不改 Column 测量高度**（D03 视口量法不受影响）。
+> **不新增状态变量、不加生命周期分支**。`DurationField.kt` / `Lang.kt` / 三语文案 / 通知 / 免打扰零改动。
+>
+> **闸门**：`tools/check_ui_copy.py` ⑧ 断言从「单行赋值串匹配」改认「入口 + 展开分支 + 收起分支 +
+> 成对清 wheelShowing」，比旧断言更严；静态 `52 PASS / 3 WARN / 0 FAIL`、三语 124×3 零未定义、
+> 证据不变量 `8 PASS / 0 FAIL`。`tools/probe_d03.py` 的 `find()` 补 XML 实体解码
+> （英文折叠头 `Bells &amp; Background` 曾让 D03 误报 0/3，中文环境不暴露），**脚本缺陷，非产品回归**。
+>
+> **真机**（红米 10X `M2003J15SC` / Android 12 / 1080×2340@440）：`adb install -r` Success，
+> `versionCode 33 / 2.32`，`firstInstallTime=2026-11-10 22:10:50` 未变。`tools/probe_v232.py`
+> **16/16 PASS**：再点圆环收回（Start y 1314→1160）、底部空白收回、preparation 后底部空白收回、
+> 侧边/顶部/内容区空白与返回键回归、滚轮态再点圆环收回且重开不残留 252dp 子状态
+> （Start y 1314 而非 1875）、点 45 分数字当场变、编辑态滚动不误收、起跑与结束正常。
+> `probe_d03.py --loop 3 --nav-top 2210` **3/3 PASS**（末两行各 66px 完整可见、收起干净）。
+> 图标：APK 内五档 PNG 按像素比对平均差 **0.00**、角像素 `(238,233,223)` 宣纸暖白；
+> 真机桌面截图浅底生效、青绿人形清晰。**已知代价：暖金弧在浅底上对比度明显不足，48dp 下
+> 几乎融进背景**，计时环主要靠棕灰弧与刻度支撑——不粉饰，下一轮换 C 或加深弧色时一起解决。
+> logcat E 级 8 行全为系统侧 Splash Screen / SuggestManager 启动日志，**无 FATAL / ANR / 应用异常**。
+>
+> **出包**：`assembleRelease --offline` **5m53s BUILD SUCCESSFUL**（含 `lintVitalRelease`），
+> `releases/zentimer-v2.32.apk`（sha256 `58ab57c920ef572052d6da88c82a7ea23768d494dd0498ed210ad7708992d381`），
+> `releases/` 只留这一个包，2.31 由 tag 回退。
+>
+> **现场**：15:00、空闲首页、无编辑层、`zen_mode=ZEN_MODE_OFF`。
+>
+> **未做 / 未验（不写成已验收）**：13 分钟主回归 `verify_device.py` 全量本轮未重跑；
+> E-2 / E-3 及 E-1 与相位耦合部分未修（熵增太过，整组留给状态机统一梳理那轮）；
+> 深浅两套主题截图本轮未重拍（UI 与配色未改，只换桌面图标）；Android 13+ 单色主题图标
+> 暂无 `ic_launcher_monochrome`，切 C 时必须补；商店 feature graphic 本轮未换。
+
+> ## 11-12 01:0x v2.31 · 提示回圈里，下方为选项整体让位（**历史版本；当前口径见上方 v2.32；下方 v2.30 及更早原文完整保留**）
+>
+> **用户原话**：「这一版的首页太丑了。不如"轻触圆环改时长"在圆圈里的时候好看。如果是为了照顾点击圆环出现时长选项留出空间。那我希望优先保证界面的美观。然后UI控件可以临时为了时长选项这一行的出现，向下统一挪动一段或者更好的办法。具体你评估，总之不接手当前的UI设计。」台账 `F20261112-02`（逐字）。设计推演 `design/时长归位-设计规格.md` §V3，三态对照原型 `design/duration-ring-v3.html`。
+>
+> **定性**：一类缺陷 —— 把「零位移」当硬约束，为它拆散了圆环这个视觉组。2.30 圆环内只剩数字、提示悬在圈外两片留白之间。**撤销**「零位移是硬约束」「提示必须移出圆环」两条旧结论；**保留**清单不显示时长、空闲态不写状态词、只有一套控件、不新增文案、选中即变。
+>
+> **改动**：`MainActivity.kt`（提示回 `RingBlock` 圈内且常驻、`DurationFootSlot` → `DurationEditLayer` 由 `AnimatedVisibility` 控制、主屏间距回 2.29 紧凑值）、`build.gradle.kts`（31→32 / 2.30→2.31）、`tools/check_ui_copy.py`（位置约束改认「提示在圈内 / 档位只在编辑层」）、`tools/verify_device.py`（N2 / N4 改认圆环读屏名）。`DurationField.kt`、`Lang.kt` **零改动**。
+>
+> **真机**：`adb install -r` Success、`firstInstallTime` 未变。四条硬断言 PASS：提示合入圆环读屏名且圈外无独立节点；圆环 bounds `[172,320][909,1057]` 展开前后相同；按钮与三行卡片**同步下移 154px（差值 0）**；档位距圆环下沿 22px=8dp。点 45 分数字当场变、收起回 y=1160、无 toast；自定义滚轮 + 返回取消正常；D03 `3/3 PASS`；深浅两套主题截图正常。验收后时长还原 **15 分**。
+>
+> **出包**：`assembleRelease --offline` 4m36s 成功（含 lintVitalRelease），`releases/zentimer-v2.31.apk`（sha256 `ad81b2583d3ba13e74fe4a74f7779432aab151e18c2dda02eed9e820ce8edb45`），tag `v2.31-basic-stable-1`，**未推 GitHub**，`releases/` 只留一个包。静态 52 PASS / 3 WARN / 0 FAIL、三语 124×3、证据 8 PASS。**13 分钟主回归全量本轮未重跑**，判据已按 v3 更新，别写成全绿。
+>
+> **现场**：夜间 `yes`、字体 1.0、时长 15 分、首屏折叠态无编辑无计时；`zen_mode=1` 来自系统定时规则，自有「静坐」规则 `STATE_FALSE`，本轮未碰勿扰权限。
+
+> ## 11-12 00:xx v2.30 · 时长归位落地（**历史版本：界面被用户否决，当前口径见上方 v2.31**；下方 v2.29 及更早原文完整保留）
+>
+> **用户原话**：「准备好了，随时开始，这段还需要吗？／开始静坐下面的"静坐时长"这一行还有必要保留吗？／UI交互设计意思对，但间距等细节还需要整体把握下再」→「按这版落地出 2.30。」设计推演全文 `design/时长归位-设计规格.md` §0（v2，以该节为准；§1–§9 是 v1 原文）。
+>
+> **改动**：`MainActivity.kt`（圆环内空闲态只留数字、新增 `DurationFootSlot` 固定 48dp 槽位、删设置卡时长行、整屏 8dp 区块间距）、`DurationField.kt`（`DurationSetting` 加 `chrome = false` 脚边变体，**仍一份实现**）、`build.gradle.kts`（30→31 / 2.29→2.30）、`tools/check_ui_copy.py`（`calls == 3` 保持但改语义 + `foot_only` 位置约束）、`tools/verify_device.py`（N2 / N4 旧判据改认新界面、M15 加短轮询）。`Lang.kt` **零改动**。
+>
+> **踩到并修掉的闸门**：删清单 duration 调用后 `guarded = len(re.findall(r"enabled = !s\.running", main))` 从 3 掉到 2 → FAIL；脚边槽位补 `enabled = !s.running && enabled` 后 3 处齐备。**教训：静态闸门里数「出现次数」的断言，删调用点必须同步补回。**
+>
+> **真机**：`adb install -r` Success、`firstInstallTime` 未变。零位移硬断言 PASS（开始静坐 `[451,1435][630,1494]` 与三行设置卡 bounds 前后完全相同）；档位距圆环下沿 12dp；点 45 分数字当场变、无 toast；清单三行；自定义滚轮 + 返回取消正常；D03 `3/3 PASS`；深浅两套主题截图正常。主回归 `27/32 PASS`，5 个 FAIL 全部复核为非产品缺陷／不适用（N2 是删行导致的旧判据、M15 是 dump 时序，两处脚本已修；**改判据后未重跑全量**）。静态 `52 PASS / 3 WARN / 0 FAIL`、三语 124×3、证据 8 PASS。
+>
+> **现场还原**：时长回用户原值 15 分、夜间模式 `yes`、字体 1.0、外观跟随系统、语言简体、勿扰权限恢复授予、自有「静坐」规则 `STATE_FALSE`、App 首屏折叠态无计时。`zen_mode=1` 来自系统定时规则，本轮未做勿扰操作。
+>
+> **发布**：`releases/zentimer-v2.30.apk`（sha256 `00806b66…f1`），tag `v2.30-basic-stable-1`，**未推 GitHub**。`releases/` 只留一个包。
+
+> ## 11-11 22:xx v2.29 · D03 事件驱动收口 / TRAE 增量审查出稳定版（**历史版本；当前口径见最上方 v2.31，下方 v2.25 及更早原文完整保留**）
+>
+> **用户原话**：「今天白天TRAE接过了部分工作，做了增量改动和测试，这是交接文件。1）对其提出的问题重新评估、解决、然后出一个稳定版 2）对TRAE改动的代码等做下审查，我对ta的代码质量和UI等设计质量没信心啊 3）再次做一个全面的交接文件，方便在WB新任务里继续。避免上下文太长导致积分损耗和AI变蠢。（这一条，我其实没把握，你告诉我是否有必要，然后再决定做不做）」。第 3 条答复：**有必要，但不能再写一份「全面」长文档**——库里已有 33KB 接手指南 / 91KB CHANGELOG / 166KB FeatureMap，再堆一份只会更贵。改为一份约 10KB 的 `HANDOFF-接手入口.md`（旧 33KB 指南的 1/3）：只放状态、事实源索引、硬约束、待办、验收命令、避坑，细节外置。
+>
+> **交接文档三条待办的重新评估**：
+> - **P0 D03「仍未修复」是旧包结论，已被推翻**。设备 21:10 装的 vc29 不含最后一版 ③；含 ③ 的 APK 是 21:22 才构建的。重新覆盖安装后用 `tools/probe_d03.py` 连做 3 轮：**3/3 PASS**，展开后「结束铃声」「背景音」都是 66px 完整行、底边在导航栏之上，收起干净。交接文档写的「①② 没生效」只对 21:10 那个包成立。
+> - **P1「自定义滚轮显示 23:58」我方初判是真 bug，查证后自己推翻**。初判：`startCustom()` 回退到 `v224_custom_duration_min` 残留的 1438 分钟（=23:58），像是把测试脏值摆给用户。查 `CHANGELOG` v2.24 段、`RELEASE-NOTES`、`FeatureMap` TC-K10 与 `.craft/rea/v224/verify_v224.py`：那条 `23 时 58 分` 正是 v2.24 验收**故意写进设备**的「上次自定义值」，而「上次自定义值按两处分别记住」是写进定稿的产品规则，不是初始化缺陷。结论：**不改产品规则**，本机残留值是设备数据、不是产品状态（真实新装用户 `stored=-1` 会回退当前值），只把「是否改成永远从当前值开始」列为待拍板项。按「结论变了别删旧版」保留上面这段初判。
+> - **P2 五条未验**（Android 13+ 通知权限、AOD/HyperOS 卡片、手指复测 D13、TalkBack 实播、D04 200ms 中间帧）：本机 Redmi 10X / Android 12 验不了，**保留未验**，不冒充。
+>
+> **代码审查**（全文 `代码审查-TRAE-v2.27-v2.28.md`）：范围 `365d729` / `a5625d0` / `64791f8`。总体可编译、主回归 29 PASS / 3 FAIL（3 条复核为非产品缺陷）、静态闸门 0 FAIL，不是烂代码；但有 4 类真问题：
+> 1. **已修 · D03 靠猜帧数**：`while + withFrameNanos`（6 帧等测量、24 帧等 maxValue）。30Hz 的 24 帧是 800ms、120Hz 只有 200ms，且裸读 `mutableIntStateOf` 不订阅变化，是时序赌博——D03 反复三轮没修好正源于此。改成 `snapshotFlow { … }.first { … } + withTimeoutOrNull(1000L)` 事件驱动，超时按当前 `maxValue` 滚到最远；`check_ui_copy.py` 新增 5 条断言（含禁止 `while+withFrameNanos` 回潮、D09 高度回退仍在、专项验收脚本在库内）。
+> 2. **已修 · 文档口径错**：交接文档「v2.28 仍未修复」与「gradlew 必死、必须复制整树」都被现场证伪。后者实测：工作区直接 `./gradlew :app:compileDebugKotlin --offline` + `ZENTIMER_BUILD_DIR` / `--project-cache-dir` 指到可写目录，**1m59s BUILD SUCCESSFUL**，无需复制工程。已同步更正工作区根 `本地工具清单.md`。
+> 3. **已修 · 注释与实现打架**：`SoundFoldHeader` 文档注释仍写「摘要宽度上限 189dp」，而 v2.27 已删掉硬上限。
+> 4. **未改 · 写进待办**：`inputLocked` 全局 200ms 锁把整张设置卡（含圆环）一起锁住，而 D13 把「200ms 内点击被吞」写成 PASS 标准，是把实现当需求；`foldBottomPx` 仍是坐标驱动（彻底解是末行挂 `BringIntoViewRequester`）；英文 `×3` 读 `rings 3 times` 的口径待用户确认；圆环 `clearAndSetSemantics` 清空子树后「轻触圆环改时长」提示不再可聚焦。以上都要真机手指 / TalkBack 才能定，不在稳定版里赌。
+>
+> **UI 设计质量**：TRAE 这批改动守住项目硬边界（无 onboarding、无卡片式档位、无渐变阴影、不改通知四表面、不碰全局勿扰）。v2.25 我方初评指出的结构性问题（两个时长入口、点圆环反馈发生在 288dp 之外、首屏下半节奏、档位选中态语义中的前三条）TRAE 没碰，仍留给豆包评审，见 `UI设计评审-苹果设计师视角-2026-11-11.md`。
+>
+> **本次改动**：`MainActivity.kt`（D03 事件驱动 + 3 处注释订正）、`build.gradle.kts`（versionCode 29→30 / 2.28→2.29）、`tools/check_ui_copy.py`（+5 断言）、`tools/probe_d03.py`（新增，分辨率/语言无关的 D03 专项验收）、`FeatureMap` §13.3/§13.4/§13.7、`RELEASE-NOTES.md`、`HANDOFF-接手入口.md`、本文件、审查报告。`Lang.kt` 与 `DurationField.kt` 本轮**未改**。
+>
+> **v2.29 验收回填（真机 `M2003J15SC / Android 12 / 1080×2340@440`，同证书覆盖安装 vc30 / 2.29）**
+> - **D03 专项**：`python tools/probe_d03.py --loop 3` → **3/3 PASS**。展开后「结束铃声」「背景音」各 66px 完整行、底边在导航栏之上，收起干净、折叠头仍在视口内。v2.28（21:22 含 ③ 包）另做过一轮 3/3 PASS，两版都过。
+> - **主回归**：`python tools/verify_device.py` → **29/32 PASS，harness_ok=True**。三个 FAIL 全部本轮重新取证复核，非产品缺陷：① L4「静坐中开关说明」——脚本 `open_settings()` 内部 force-stop 冷启动丢了计时态；不冷启动、走抽屉进设置页，开关 desc 实测为「随节气换肤，开，静坐中不更换主题色」，**PASS**。② M2「免打扰中小字」——Compose 自绘文字 `uiautomator` 抓不到节点，运行态截图 `04_running_home.png` 清楚可见「准备中 / 免打扰中」，**PASS**。③ N1 要求 Android 15+ 机型，本机 SDK 31，**不适用**。有效 **31 PASS / 0 产品缺陷 / 1 不适用**。修 `verify_device.py` 的 L4/M2 判据列为待办，不在本轮赌脚本大改。
+> - **静态**：`check_ui_copy.py` **52 PASS / 3 WARN / 0 FAIL**（新增 5 条 D03 断言），`check_lang.py` 三语各 **124** 条 / 引用 114 key / 未定义 **0**，`check_evidence_invariants.py` **8 PASS / 0 FAIL**。3 条 WARN 全是历史项（静态未见引用 2 条、窄屏长文案 3 类、无障碍 null 图待人工过）。
+> - **构建**：`./gradlew :app:assembleRelease --offline`（含 `lintVitalRelease`）**4m6s BUILD SUCCESSFUL**，`compileDebugKotlin` 1m59s；仅 3 条 `Notification.Builder.addAction` deprecated 警告，无错误。
+> - **产物**：`releases/zentimer-v2.29.apk`，27,236,983 B，sha256 `c33f20e97d5f0f9c94122b5a8a9fcc8698d1ec84a024ff89624a1d7e9dcba386`；按「`releases/` 只留一个与代码同步的最新包」删掉 v2.26 / v2.27 两个旧包。本地 annotated tag `v2.29-basic-stable-4`。
+> - **现场已还原**：勿扰权限撤销、月份钩子删除、外观跟随系统、语言回简体、字体缩放 1.0、计时态停止、设备勿扰回基线（`zen_mode=1` / `filter=2`）、规则停用。`v224_custom_duration_min` 里 v2.24 验收留下的 1438 分未动——它是本机数据不是产品状态，真实新装用户不会遇到；要清就重装或手动设一次自定义值。
+> - **不主动 push**：用户这轮没要求，v2.25 的 `dd5aa13` 仍是公开仓库最近一次同步。
+
 > ## 11-11 00:xx v2.25 · 四时纸色 / 静坐时免打扰（**本条为当前口径，v2.24 原文完整保留在下方**）
 >
 > 用户 11-10 23:20 原话：「对现有版本先打tag（基本款功能第二个稳定版，人工验收后可以考虑上传到github）／然后再继续开发两个feature @四季配色… @静坐中屏蔽干扰…／**后者开发，要避免程序退出后，系统的静音等配置没有复原，影响正常使用。这个是底线**」。
