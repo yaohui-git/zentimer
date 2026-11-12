@@ -53,8 +53,15 @@
 > 期间修掉三次**脚本自身**缺陷（见下），均不计产品问题。
 >
 > **交付**：2.33 / vc34，装机红米 10X（`firstInstallTime` 未变）；`screenshots/` 重拍 7 张
-> （首页 / 档位层 / 铃声弹层 / 常用预设 / 计时中 / 关于 / 设置）；本地提交 + 公开 GitHub
-> 仓库 `yaohui-git/zentimer` 同步一次 release 提交与稳定内测 tag。
+> （首页 / 档位层 / 铃声弹层 / 常用预设 / 计时中 / 关于 / 设置）。
+> **推送已落地**（11-12 10:5x 补记）：公开库 `yaohui-git/zentimer` 的 `main`
+> 由 `dd5aa13`（v2.25）推进到 v2.33 提交，tag `v2.33-beta` 已推，`git ls-remote`
+> 复核 `refs/heads/main` 与 `refs/tags/v2.33-beta` 均指向同一提交。
+> **踩坑备案**：先用 HTTPS 地址建发布库 → 本机代理 `https_proxy=127.0.0.1:54615`
+> 对 GitHub 返 502 / `Empty reply from server`，`push main` 曾「退出码 0 但无输出」；
+> **不是 2FA 也不是 SSH key 失效**（`ssh -T git@github.com` 实测认证正常）。
+> 修法是把发布库 remote 改回 `git@github.com:` **SSH**——SSH 走 22 直连，不经过 HTTP 代理。
+> `releases/zentimer-v2.33.apk` 27,246,891 B，sha256 `e2b78f21…16b2`。
 > **本轮没有**：状态机 / 相位逻辑 / 通知字段结构 / 中文文案 / 图标资源改动；
 > AOD 深睡态未重拍（沿用既有不变量结论，不谎称已验）。
 
